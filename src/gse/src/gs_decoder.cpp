@@ -245,6 +245,7 @@ std::size_t Decoder::Decode(DataBuffer<> &data_buffer, Head1 &value)
         }
 
         // Assign the decoded object
+        value.ipd_present = true;
         value.ipd = std::get<HeadIPD1>(object);
 
         // Discard any octets not understood
