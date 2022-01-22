@@ -174,8 +174,7 @@ namespace gs
         Time1 time;
         Loc2 location;
         Rot2 rotation;
-        Boolean ipd_present;
-        HeadIPD1 ipd;
+        std::optional<HeadIPD1> ipd;
     };
 
     struct Mesh1
