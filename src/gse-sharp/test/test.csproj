@@ -32,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\gse-sharp-transceiver\gse-sharp-transceiver.csproj" />
     <ProjectReference Include="..\src\gse-sharp.csproj" />
   </ItemGroup>
 

@@ -29,7 +29,6 @@
 
 using System;
 using System.Runtime.InteropServices;
-using System.Linq;
 
 // GSE Types.
 using VarUint = System.UInt64;
@@ -37,13 +36,33 @@ using ObjectId = System.UInt64;
 using Time1 = System.UInt16;
 using Bool = System.Byte;
 using GSHalf = System.Single;
-using System.Collections.Generic;
 
 namespace gs.sharp
 {
     public interface IObject
     {
         ObjectId ID { get; }
+    }
+
+    /// <summary>
+    /// This object is unix epoch timestamped.
+    /// </summary>
+    public interface ITimestamped
+    {
+        DateTimeOffset Timestamp { get; }
+    }
+
+    public interface IMessage : IObject, ITimestamped { }
+
+    internal struct BaseObject : IObject
+    {
+        public ObjectId ID { get; }
+        public BaseObject(ObjectId id) => ID = id;
+    }
+
+    public static class IObjectExtension
+    {
+        public static IObject AsIObject(this string id) => new BaseObject(Convert.ToUInt64(id));
     }
 
     public readonly struct Head1 : IObject
@@ -72,9 +91,10 @@ namespace gs.sharp
         }
     }
 
-    public readonly struct Object1 : IObject
+    public readonly struct Object1 : IMessage
     {
         public ObjectId ID => id;
+        public DateTimeOffset Timestamp => DateTimeOffset.FromUnixTimeMilliseconds(Time);
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -84,10 +104,10 @@ namespace gs.sharp
         public readonly Bool HasParent;
         public readonly ObjectId Parent;
 
-        public Object1(ObjectId id, Time1 time, Loc1 location, Rot1 rotation, Loc1 scale, ObjectId? parent = null) : this()
+        public Object1(ObjectId id, DateTimeOffset time, Loc1 location, Rot1 rotation, Loc1 scale, ObjectId? parent = null) : this()
         {
             this.id = id;
-            Time = time;
+            Time = (ushort)(time.ToUnixTimeMilliseconds() % 65536);
             Location = location;
             Rotation = rotation;
             Scale = scale;
