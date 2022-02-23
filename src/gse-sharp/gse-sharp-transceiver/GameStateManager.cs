@@ -45,14 +45,14 @@ namespace gs.sharp.transceiver
         }
 
         /// <summary>
-        /// Calculate which update to render for all managed transcievers.
+        /// Get all transceivers to check retransmission.
         /// </summary>
-        public void CalculateAll()
+        public void RetransmitAll()
         {
             // Process all transcievers.
             foreach (var transciever in _transcievers.Values)
             {
-                transciever.CalculateRender();
+                transciever.Retransmit();
             }
         }
 
@@ -130,6 +130,6 @@ namespace gs.sharp.transceiver
             base.Dispose(disposing);
         }
 
-        private void OnTimerElapsed(object state) => CalculateAll();
+        private void OnTimerElapsed(object state) => RetransmitAll();
     }
 }

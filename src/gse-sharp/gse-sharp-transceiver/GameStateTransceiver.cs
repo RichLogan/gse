@@ -8,6 +8,11 @@ namespace gs.sharp.transceiver
         /// Fires when this transceiver wants to send a message.
         /// </summary>
         event EventHandler<IMessage> MessageToSend;
+
+        /// <summary>
+        /// Retransmit if appropriate.
+        /// </summary>
+        void Retransmit();
     }
 
     public interface IGameStateReceiver
@@ -15,15 +20,7 @@ namespace gs.sharp.transceiver
         IMessage Remote { get; set; }
     }
 
-    public interface IGameStateTransceiver : IGameStateReceiver, IGameStateSender
-    {
-        /// <summary>
-        /// Calculate the render output to the given value.
-        /// You should not call this directly, a <see cref="GameStateManager"/>
-        /// should manage this value on your behalf.
-        /// </summary>
-        void CalculateRender();
-    }
+    public interface IGameStateTransceiver : IGameStateReceiver, IGameStateSender { }
 
     /// <summary>
     /// Interface for a game state transciever, understanding local
@@ -40,9 +37,9 @@ namespace gs.sharp.transceiver
 
         /// <summary>
         /// The update you should render at the moment
-        /// this is called. Don't cache this. Consumed on use.
+        /// this is called. Don't cache this.
         /// </summary>
-        T Render { get; set; }
+        T Render { get; }
     }
 
     /// <summary>
@@ -51,9 +48,9 @@ namespace gs.sharp.transceiver
     /// <typeparam name="T"></typeparam>
     public class GameStateTransceiver<T> : IGameStateTransceiver<T> where T : IMessage
     {
+        /// <inheritdoc/>
         public event EventHandler<IMessage> MessageToSend;
 
-        private T _local;
         /// <inheritdoc/>
         public T Local
         {
@@ -74,64 +71,89 @@ namespace gs.sharp.transceiver
             }
         }
 
+
         /// <inheritdoc/>
-        public IMessage Remote { get; set; }
+        public IMessage Remote
+        {
+            get => _remote;
+            set
+            {
+                _lastUpdateReceived = DateTime.UtcNow;
+                _remote = (T)value;
+            }
+        }
 
         private T _render;
         public T Render
         {
             get
             {
-                var tmp = _render;
-                _render = default;
-                return tmp;
-
+                // Priority for the non null value.
+                if (Local == null && _remote == null)
+                {
+                    _render = default;
+                }
+                else if (Local != null && _remote == null)
+                {
+                    _render = _local;
+                }
+                else if (_remote != null && Local == null)
+                {
+                    _render = _remote;
+                }
+                else
+                {
+                    _render = Local.Timestamp >= _remote.Timestamp ? Local : _remote;
+                }
+                return _render;
             }
-            set => _render = value;
         }
 
-        public void CalculateRender()
+        // Data members.
+        private T _local;
+        private T _remote;
+
+        // Retransmit members.
+        private bool _retransmitting = false;
+        private DateTime? _lastUpdateReceived = null;
+        private DateTime? _lastRetransmit = null;
+
+        /// <inheritdoc/>
+        public void Retransmit()
         {
-            // If we have a local update, and no remote update,
-            // take local.
-            if (Local != null && Remote == null)
+            if (Local.Timestamp > Remote.Timestamp)
             {
-                Render = Local;
-                Local = default;
-                return;
+                // If we updated this last, we're responsible.
+                _retransmitting = true;
+            }
+            else if (Remote.Timestamp >= Local.Timestamp)
+            {
+                // If we got an update recently, we're not responsible.
+                _retransmitting = false;
+            }
+            else if (_lastRetransmit != null)
+            {
+                // We wait at least one whole check before assuming responsibility.
+                if (Remote == null)
+                {
+                    // If there has been no remote update, we'll assume responsibility.
+                    _retransmitting = true;
+                }
+                else if (_lastUpdateReceived != null && _lastRetransmit > _lastUpdateReceived)
+                {
+                    // If there has been no update since the last cycle, we'll assume responsibility.
+                    _retransmitting = true;
+                }
             }
 
-            // If we have a remote update, and no local update,
-            // take remote.
-            if (Remote != null && Local == null)
+            // Do the retransmit if appropriate.
+            if (_retransmitting)
             {
-                Render = (T)Remote;
-                Remote = null;
-                return;
-            }
-
-            // If we have a local update newer than a remote
-            // update, take local and send to peers.
-            if (Local.Timestamp >= Remote.Timestamp)
-            {
-                // Update the data to be rendered.
-                Render = Local;
-                // Send this update out.
                 MessageToSend?.Invoke(this, Local);
-
-                Local = default;
-                return;
             }
 
-
-            // If we have a newer remote update, apply it.
-            if (Remote.Timestamp >= Local.Timestamp)
-            {
-                // Update the data to be rendered.
-                Render = (T)Remote;
-                Remote = null;
-                return;
-            }
+            // Record the point at which we retransmitted.
+            _lastRetransmit = DateTime.UtcNow;
         }
     }
 }

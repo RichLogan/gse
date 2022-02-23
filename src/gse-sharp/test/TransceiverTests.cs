@@ -40,17 +40,16 @@ public class TransceiverTests
         var remote = new MockData(DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), 1);
         transceiver.Remote = remote;
 
-        // New local.
-        var local = new MockData(DateTimeOffset.UtcNow, 2);
-        transceiver.Local = local;
-
         // As this is a new update, we're expecting a
         // send event.
         bool fired = false;
         transceiver.MessageToSend += (_, __) => fired = true;
 
+        // New local.
+        var local = new MockData(DateTimeOffset.UtcNow, 2);
+        transceiver.Local = local;
+
         // Execute.
-        gsm.CalculateAll();
         Assert.IsTrue(fired);
 
         // Validate.
@@ -82,32 +81,12 @@ public class TransceiverTests
         transceiver.Remote = remote;
 
         // Execute.
-        gsm.CalculateAll();
         Assert.IsFalse(fired);
 
         var captured = transceiver.Render;
         Assert.AreEqual(remote, captured);
         Assert.AreNotEqual(local, captured);
     }
-    
-    [TestMethod]
-    public void TestRenderConsume()
-    {
-        var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver<MockData>();
-        gsm.Register("1".AsIObject(), transceiver);
-
-        var local = new MockData(DateTimeOffset.UtcNow, 2);
-        transceiver.Local = local;
-
-        // Execute.
-        gsm.CalculateAll();
-
-        // Validate.
-        Assert.AreNotEqual(default(MockData), transceiver.Render);
-        Assert.AreEqual(default(MockData), transceiver.Render);
-    }
-
 
     [TestMethod]
     public void CheckUnknownNotification()
