@@ -58,19 +58,60 @@ namespace gs.sharp.transceiver
 
         public void Dispose() => Dispose(true);
 
-        private void Transciever_MessageToSend(object sender, IMessage e) => _transport.Send(e);
-
-        private void Transport_OnMessageReceived(object sender, IMessage message)
+        private void Transciever_MessageToSend(object sender, IMessage e)
         {
-            if (_transcievers.TryGetValue(message, out IGameStateTransceiver transceiver))
+            // TODO: Is this correct to do per message?
+            // Encode.
+            var encoder = new Encoder(1500);
+            encoder.Encode(e);
+
+            // Send.
+            var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength());
+            _transport.Send(encodedMessage);
+        }
+
+        private void Transport_OnMessageReceived(object sender, EncodedMessage encoded)
+        {
+            // Decode.
+            var decoder = new Decoder(encoded.Length, encoded.Buffer);
+            (object decoded, Type type)? result = decoder.Decode();
+
+            if (!result.HasValue)
             {
-                // Pass the message to the transceiver.
-                transceiver.Remote = message;
-                return;
+                // Not good!
+                throw new InvalidOperationException("Undecodable message");
             }
 
-            // If we don't have a transceiver for this, fire the unknown event.
-            OnUnregisteredUpdate?.Invoke(this, message);
+            // First, unknowns get handled.
+
+            if (result.Value.type == typeof(UnknownObject))
+            {
+                throw new NotImplementedException();
+            }
+
+            // Then IMessage/IObject.
+            if (result.Value.decoded is IMessage message)
+            {
+                // Pass to transceivers.
+                if (_transcievers.TryGetValue(message, out IGameStateTransceiver transceiver))
+                {
+                    // Pass the message to the transceiver.
+                    transceiver.Remote = message;
+                    return;
+                }
+
+                // If we don't have a transceiver for this, fire the unknown event.
+                OnUnregisteredUpdate?.Invoke(this, message);
+            }
+            else if (result.Value.decoded is IObject obj)
+            {
+                // Just an object.
+                throw new NotImplementedException();
+            }
+            else
+            {
+                throw new InvalidOperationException("Uncastable message");
+            }
         }
 
         // Protected implementation of Dispose pattern.

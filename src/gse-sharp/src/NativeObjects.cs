@@ -65,10 +65,22 @@ namespace gs.sharp
         public static IObject AsIObject(this string id) => new BaseObject(Convert.ToUInt64(id));
     }
 
-    public readonly struct Head1 : IObject
+    internal static class TimeExtension
+    {
+        // Time is lower 16bits ms from unix epoch.
+        public static DateTimeOffset ToDateTimeOffset(this Time1 time) => DateTimeOffset.FromUnixTimeMilliseconds(Convert.ToInt64(time));
+    }
+
+    internal static class DateTimeOffsetExtension
+    {
+        public static Time1 ToTime1(this DateTimeOffset datetime) => BitConverter.ToUInt16(BitConverter.GetBytes(datetime.ToUnixTimeMilliseconds()), 0);
+    }
+
+    public readonly struct Head1 : IMessage
     {
         public ObjectId ID => id;
         public bool IPDPresent => Convert.ToBoolean(ipdPresent);
+        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -94,7 +106,7 @@ namespace gs.sharp
     public readonly struct Object1 : IMessage
     {
         public ObjectId ID => id;
-        public DateTimeOffset Timestamp => DateTimeOffset.FromUnixTimeMilliseconds(Time);
+        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -107,7 +119,7 @@ namespace gs.sharp
         public Object1(ObjectId id, DateTimeOffset time, Loc1 location, Rot1 rotation, Loc1 scale, ObjectId? parent = null) : this()
         {
             this.id = id;
-            Time = (ushort)(time.ToUnixTimeMilliseconds() % 65536);
+            Time = time.ToTime1();
             Location = location;
             Rotation = rotation;
             Scale = scale;
@@ -119,9 +131,10 @@ namespace gs.sharp
         }
     }
 
-    public readonly struct Hand1 : IObject
+    public readonly struct Hand1 : IMessage
     {
         public ObjectId ID => id;
+        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -263,9 +276,10 @@ namespace gs.sharp
         }
     }
 
-    public readonly struct Hand2 : IObject
+    public readonly struct Hand2 : IMessage
     {
         public ObjectId ID => id;
+        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
 
         private readonly ObjectId id;
         public readonly Time1 Time;
