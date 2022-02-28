@@ -615,7 +615,7 @@ namespace {
 
     TEST_F(GSAPITest, Test_Decode_Object1)
     {
-        std::vector<std::uint8_t> expected{
+        std::vector<std::uint8_t> expected{            
             // tag
             0x03,
 

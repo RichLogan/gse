@@ -2,6 +2,9 @@
 
 namespace gs.sharp.transceiver
 {
+    /// <summary>
+    /// Sender of <see cref="IMessage"/> messages.
+    /// </summary>
     public interface IGameStateSender
     {
         /// <summary>
@@ -15,12 +18,27 @@ namespace gs.sharp.transceiver
         void Retransmit();
     }
 
+    /// <summary>
+    /// Receiver of <see cref="IMessage"/> messages.
+    /// </summary>
     public interface IGameStateReceiver
     {
-        IMessage Remote { get; set; }
+        /// <summary>
+        /// Represents a remote update.
+        /// </summary>
+        IMessage Remote { set; }
     }
 
-    public interface IGameStateTransceiver : IGameStateReceiver, IGameStateSender { }
+    /// <summary>
+    /// Transceiver of <see cref="IMessage"/> messages.
+    /// </summary>
+    public interface IGameStateTransceiver : IGameStateReceiver, IGameStateSender
+    {
+        /// <summary>
+        /// Log callback.
+        /// </summary>
+        event EventHandler<LogEventArgs> Log;
+    }
 
     /// <summary>
     /// Interface for a game state transciever, understanding local
@@ -28,37 +46,39 @@ namespace gs.sharp.transceiver
     /// set. Expected to be managed from a <see cref="GameStateManager"/>.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public interface IGameStateTransceiver<T> : IGameStateTransceiver where T : IMessage
+    public interface IGameStateTransceiver<T> : IGameStateTransceiver where T : struct, IMessage
     {
         /// <summary>
-        /// The most recent local update, if any.
+        /// A provided local update.
         /// </summary>
-        T Local { get; set; }
+        T Local { set; }
 
         /// <summary>
         /// The update you should render at the moment
-        /// this is called. Don't cache this.
+        /// this is called. Don't cache this. Returns null
+        /// if nothing to do.
         /// </summary>
-        T Render { get; }
+        T? Render { get; }
     }
 
     /// <summary>
     /// Base implementation of a <see cref="IGameStateTransceiver{T}"/>.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class GameStateTransceiver<T> : IGameStateTransceiver<T> where T : IMessage
+    public class GameStateTransceiver<T> : IGameStateTransceiver<T> where T : struct, IMessage
     {
         /// <inheritdoc/>
         public event EventHandler<IMessage> MessageToSend;
+        /// <inheritdoc/>
+        public event EventHandler<LogEventArgs> Log;
 
         /// <inheritdoc/>
         public T Local
         {
-            get => _local;
             set
             {
                 // Only allow local updates to go forward in time.
-                if (Local != null && value != null && Local.Timestamp > value.Timestamp)
+                if (_local.HasValue && _local.Value.Timestamp > value.Timestamp)
                 {
                     throw new ArgumentException("Local updates must move forward in time", nameof(value));
                 }
@@ -67,66 +87,102 @@ namespace gs.sharp.transceiver
                 MessageToSend?.Invoke(this, value);
 
                 // Update.
-                _local = value;
+                _local = _lastLocal = value;
             }
         }
-
 
         /// <inheritdoc/>
         public IMessage Remote
         {
-            get => _remote;
             set
             {
                 _lastUpdateReceived = DateTime.UtcNow;
-                _remote = (T)value;
+                _remote = _lastRemote = (T)value;
+                DoLog(LogType.Debug, $"[{value.ID}] Applied remote update");
             }
         }
 
-        private T _render;
-        public T Render
+        /// <inheritdoc/>
+        public T? Render
         {
             get
             {
                 // Priority for the non null value.
-                if (Local == null && _remote == null)
+                T? result;
+                if (_local == null && _remote == null)
                 {
-                    _render = default;
+                    // If local and remote are empty, there's nothing to do.
+                    DoLog(LogType.Debug, $"[?] Nothing to render");
+                    result = null;
                 }
-                else if (Local != null && _remote == null)
+                else if (_local != null && _remote == null)
                 {
-                    _render = _local;
+                    // If local has data, but remote doesn't, use local.
+                    DoLog(LogType.Debug, $"[{_local.Value.ID}] Rendered local as no remote update seen");
+                    result = _local;
                 }
-                else if (_remote != null && Local == null)
+                else if (_remote != null && _local == null)
                 {
-                    _render = _remote;
+                    // If remote has data, but local doesn't, use remote.
+                    DoLog(LogType.Debug, $"[{_remote.Value.ID}] Rendered remote as no local update seen");
+                    result = _remote;
                 }
                 else
                 {
-                    _render = Local.Timestamp >= _remote.Timestamp ? Local : _remote;
+                    // Both have data, so we take the newest.
+                    if (_local.Value.Timestamp >= _remote.Value.Timestamp)
+                    {
+                        DoLog(LogType.Debug, $"[{_local.Value.ID}] Rendered local as newer");
+                        result = _local;
+                    }
+                    else
+                    {
+                        DoLog(LogType.Debug, $"[{_remote.Value.ID}] Rendered remote as newer");
+                        result = _remote;
+                    }
                 }
-                return _render;
+
+                // Remove old data, return the result.
+                _local = null;
+                _remote = null;
+                return result;
             }
         }
 
         // Data members.
-        private T _local;
-        private T _remote;
+        private T? _local = null;
+        private T? _remote = null;
 
         // Retransmit members.
+        private T? _lastLocal = null;
+        private T? _lastRemote = null;
         private bool _retransmitting = false;
         private DateTime? _lastUpdateReceived = null;
         private DateTime? _lastRetransmit = null;
 
+        // Logs.
+        private readonly bool _debugging = false;
+
+        /// <summary>
+        /// Create a new transceiver.
+        /// </summary>
+        /// <param name="debugging">Try to log at the debug level.</param>
+        public GameStateTransceiver(bool debugging = false) => _debugging = debugging;
+
         /// <inheritdoc/>
         public void Retransmit()
         {
-            if (Local.Timestamp > Remote.Timestamp)
+            if (_lastLocal == null && _lastRemote == null)
+            {
+                // There's nothing to retransmit right now, so we'll try again later.
+                _retransmitting = false;
+            }
+            else if (_lastLocal.Value.Timestamp > _lastRemote.Value.Timestamp)
             {
                 // If we updated this last, we're responsible.
                 _retransmitting = true;
             }
-            else if (Remote.Timestamp >= Local.Timestamp)
+            else if (_lastRemote.Value.Timestamp >= _lastLocal.Value.Timestamp)
             {
                 // If we got an update recently, we're not responsible.
                 _retransmitting = false;
@@ -134,7 +190,7 @@ namespace gs.sharp.transceiver
             else if (_lastRetransmit != null)
             {
                 // We wait at least one whole check before assuming responsibility.
-                if (Remote == null)
+                if (_lastRemote == null)
                 {
                     // If there has been no remote update, we'll assume responsibility.
                     _retransmitting = true;
@@ -149,11 +205,18 @@ namespace gs.sharp.transceiver
             // Do the retransmit if appropriate.
             if (_retransmitting)
             {
-                MessageToSend?.Invoke(this, Local);
+                DoLog(LogType.Debug, $"[{_lastLocal.Value.ID}] Retransmitting");
+                MessageToSend?.Invoke(this, _lastLocal);
             }
 
             // Record the point at which we retransmitted.
             _lastRetransmit = DateTime.UtcNow;
+        }
+
+        private void DoLog(LogType level, string message)
+        {
+            if (level == LogType.Debug && !_debugging) return;
+            Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
         }
     }
 }

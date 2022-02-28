@@ -4,6 +4,13 @@ using System.Threading;
 
 namespace gs.sharp.transceiver
 {
+    public enum LogType { Info, Error, Debug, }
+    public class LogEventArgs : EventArgs
+    {
+        public LogType LogType { get; set; }
+        public string Message { get; set; }
+    }
+
     /// <summary>
     /// Manages <see cref="IGameStateTransceiver"/> through an <see cref="IGameStateTransport"/>,
     /// sending, receiving and updating the render property for each transciever automatically.
@@ -16,20 +23,27 @@ namespace gs.sharp.transceiver
         /// </summary>
         public event EventHandler<IMessage> OnUnregisteredUpdate;
 
+        /// <summary>
+        /// Logs.
+        /// </summary>
+        public event EventHandler<LogEventArgs> Log;
+
         protected const int MIN_START_TIME = 500;
         protected const int MAX_START_TIME = 1000;
 
-        protected readonly Dictionary<IObject, IGameStateTransceiver> _transcievers = new Dictionary<IObject, IGameStateTransceiver>();
+        protected readonly Dictionary<IObject, IGameStateTransceiver> _transcievers = new Dictionary<IObject, IGameStateTransceiver>(new IObjectEqualityComparer());
         private readonly IGameStateTransport _transport;
+        private readonly bool _debugging;
         private bool _disposedValue;
 
         /// <summary>
         /// Create a new GameStateManager object.
         /// </summary>
         /// <param name="transport">Transport to use.</param>
-        public GameStateManager(in IGameStateTransport transport)
+        public GameStateManager(in IGameStateTransport transport, bool debugging = false)
         {
             _transport = transport;
+            _debugging = debugging;
             _transport.OnMessageReceived += Transport_OnMessageReceived;
         }
 
@@ -52,65 +66,96 @@ namespace gs.sharp.transceiver
             // Process all transcievers.
             foreach (var transciever in _transcievers.Values)
             {
-                transciever.Retransmit();
+                try
+                {
+                    transciever.Retransmit();
+                }
+                catch (Exception exception)
+                {
+                    DoLog(LogType.Error, $"Exception during retransmit: {exception.Message}");
+                    continue;
+                }
             }
         }
 
         public void Dispose() => Dispose(true);
 
+        private void DoLog(LogType level, string message)
+        {
+            if (level == LogType.Debug && !_debugging) return;
+            Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
+        }
+
         private void Transciever_MessageToSend(object sender, IMessage e)
         {
-            // TODO: Is this correct to do per message?
-            // Encode.
-            var encoder = new Encoder(1500);
-            encoder.Encode(e);
+            try
+            {
+                // TODO: Is this correct to do per message?
+                // Encode.
+                var encoder = new Encoder(1500);
+                encoder.Encode(e);
 
-            // Send.
-            var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength());
-            _transport.Send(encodedMessage);
+                // Send.
+                var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength());
+                _transport.Send(encodedMessage);
+            }
+            catch (Exception exception)
+            {
+                DoLog(LogType.Error, $"Exception sending message: {exception.Message}");
+            }
         }
 
         private void Transport_OnMessageReceived(object sender, EncodedMessage encoded)
         {
-            // Decode.
-            var decoder = new Decoder(encoded.Length, encoded.Buffer);
-            (object decoded, Type type)? result = decoder.Decode();
-
-            if (!result.HasValue)
+            DoLog(LogType.Debug, $"Got message of length {encoded.Length} from transport");
+            try
             {
-                // Not good!
-                throw new InvalidOperationException("Undecodable message");
-            }
-
-            // First, unknowns get handled.
-
-            if (result.Value.type == typeof(UnknownObject))
-            {
-                throw new NotImplementedException();
-            }
-
-            // Then IMessage/IObject.
-            if (result.Value.decoded is IMessage message)
-            {
-                // Pass to transceivers.
-                if (_transcievers.TryGetValue(message, out IGameStateTransceiver transceiver))
+                // Decode.
+                var decoder = new Decoder(encoded.Length, encoded.Buffer);
+                (object decoded, Type type)? result = decoder.Decode();
+                if (!result.HasValue)
                 {
-                    // Pass the message to the transceiver.
-                    transceiver.Remote = message;
+                    // Failed to deocde anything from this message, but we are expecting find something at this point.
+                    DoLog(LogType.Error, "Undecodable message");
                     return;
                 }
 
-                // If we don't have a transceiver for this, fire the unknown event.
-                OnUnregisteredUpdate?.Invoke(this, message);
+                // First, unknowns get handled.
+                if (result.Value.type == typeof(UnknownObject))
+                {
+                    // Not implemented.
+                    DoLog(LogType.Debug, "UnknownObject message");
+                    return;
+                }
+
+                // Then IMessage/IObject.
+                if (result.Value.decoded is IMessage message)
+                {
+                    // Pass to transceivers.
+                    DoLog(LogType.Debug, $"[{message.ID}] Got message");
+                    if (_transcievers.TryGetValue(message, out IGameStateTransceiver transceiver))
+                    {
+                        // Pass the message to the transceiver.
+                        transceiver.Remote = message;
+                        return;
+                    }
+
+                    // If we don't have a transceiver for this, fire the unknown event.
+                    OnUnregisteredUpdate?.Invoke(this, message);
+                    return;
+                }
+
+                // Plain objects next.
+                if (result.Value.decoded is IObject obj)
+                {
+                    // TODO: Not implemented.
+                    DoLog(LogType.Debug, $"[{obj.ID}] Got message with no timestamp");
+                    return;
+                }
             }
-            else if (result.Value.decoded is IObject obj)
+            catch (Exception exception)
             {
-                // Just an object.
-                throw new NotImplementedException();
-            }
-            else
-            {
-                throw new InvalidOperationException("Uncastable message");
+                DoLog(LogType.Error, $"Exception handling message: {exception.Message}");
             }
         }
 

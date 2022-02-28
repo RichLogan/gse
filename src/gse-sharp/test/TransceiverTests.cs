@@ -3,6 +3,7 @@ using System;
 
 namespace gs.sharp.test;
 
+using System.Diagnostics.CodeAnalysis;
 using transceiver;
 
 [TestClass]
@@ -15,16 +16,28 @@ public class TransceiverTests
         public void MockArrival(in EncodedMessage message) => OnMessageReceived?.Invoke(this, message);
     }
 
-    private class MockData : IMessage
+    private readonly struct MockData : IMessage
     {
-        public DateTimeOffset Timestamp { get; private set; }
-        public ulong ID { get; private set; }
+        public DateTimeOffset Timestamp => _timestamp;
+        public ulong ID => _id;
+
+        private readonly DateTimeOffset _timestamp;
+        private readonly ulong _id;
 
         public MockData(DateTimeOffset time, ulong id)
         {
-            Timestamp = time;
-            ID = id;
+            _timestamp = time;
+            _id = id;
         }
+
+        public override bool Equals([NotNullWhen(true)] object? obj)
+        {
+            if (obj == null) return false;
+            var other = (MockData)obj;
+            return other.ID == ID && other.Timestamp == Timestamp;
+        }
+
+        public override int GetHashCode() => (int)((long)ID ^ Timestamp.ToUnixTimeMilliseconds());
     }
 
     [TestMethod]
@@ -54,8 +67,20 @@ public class TransceiverTests
 
         // Validate.
         var captured = transceiver.Render;
-        Assert.AreEqual(local, captured);
+        Assert.AreNotEqual(default, captured);
         Assert.AreNotEqual(remote, captured);
+        Assert.AreEqual(local, captured);
+        Assert.AreEqual(default, transceiver.Render);
+    }
+
+    [TestMethod]
+    public void TestRenderNoData()
+    {
+        var gsm = new GameStateManager(new MockTransport());
+        var transceiver = new GameStateTransceiver<MockData>();
+        gsm.Register("2".AsIObject(), transceiver);
+        var render = transceiver.Render;
+        Assert.AreEqual(default, render);
     }
 
     [TestMethod]
@@ -84,8 +109,10 @@ public class TransceiverTests
         Assert.IsFalse(fired);
 
         var captured = transceiver.Render;
-        Assert.AreEqual(remote, captured);
+        Assert.AreNotEqual(default, captured);
         Assert.AreNotEqual(local, captured);
+        Assert.AreEqual(remote, captured);
+        Assert.AreEqual(default, transceiver.Render);
     }
 
     //[TestMethod]
