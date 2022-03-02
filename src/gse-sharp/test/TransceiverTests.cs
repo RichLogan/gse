@@ -41,7 +41,7 @@ public class TransceiverTests
     }
 
     [TestMethod]
-    public void TestAlgorithmLocal()
+    public void TestRenderLocal()
     {
         // A recent local update should take precedence
         // over a remote update.
@@ -84,7 +84,7 @@ public class TransceiverTests
     }
 
     [TestMethod]
-    public void TestAlgorithmRemote()
+    public void TestRenderRemote()
     {
         // A recent remote update should take precedence
         // over a local update.
@@ -120,7 +120,7 @@ public class TransceiverTests
         public IMessage Remote { get; set; }
         public event EventHandler<LogEventArgs> Log;
         public event EventHandler<IMessage> MessageToSend;
-        public void Retransmit() { }
+        public bool Retransmit() => false;
     }
 
     [TestMethod]
@@ -154,4 +154,79 @@ public class TransceiverTests
         // That message should have made it through.
         Assert.AreEqual(fakeMessage.ID, mockTransceiver.Remote.ID);
     }
+
+    #region Retransmission Tests
+
+    [TestMethod]
+    public void RetransmitNoData()
+    {
+        // Setup and proc skipped retransmit.
+        var transv = new GameStateTransceiver<MockData>();
+        transv.Retransmit();
+
+        // No data, no retransmit.
+        Assert.IsFalse(transv.Retransmit());
+    }
+
+    [TestMethod]
+    public void RetransmitLocalOnly()
+    {
+        // Setup and proc skipped retransmit.
+        var transv = new GameStateTransceiver<MockData>();
+        transv.Retransmit();
+        
+        var local = new MockData(DateTime.UtcNow, 1);
+        transv.Local = local;
+
+        // Local only should retransmit.
+        Assert.IsTrue(transv.Retransmit());
+    }
+
+    [TestMethod]
+    public void RetransmitRemoteOnly()
+    {
+        // Setup and proc skipped retransmit.
+        var transv = new GameStateTransceiver<MockData>();
+        transv.Retransmit();
+
+        var remote = new MockData(DateTime.UtcNow, 1);
+        transv.Remote = remote;
+
+        // Recent remove only should not retransmit.
+        Assert.IsFalse(transv.Retransmit());
+    }
+
+    [TestMethod]
+    public void RetransmitLocalNewer()
+    {
+        // Setup and proc skipped retransmit.
+        var transv = new GameStateTransceiver<MockData>();
+        transv.Retransmit();
+
+        var local = new MockData(DateTime.UtcNow, 1);
+        var remote = new MockData(DateTimeOffset.UtcNow.AddHours(-1), 2);
+        transv.Local = local;
+        transv.Remote = remote;
+
+        // We own the latest local update, so we should retransmit.
+        Assert.IsTrue(transv.Retransmit());
+    }
+
+    [TestMethod]
+    public void RetransmitRemoteNewer()
+    {
+        // Setup and proc skipped retransmit.
+        var transv = new GameStateTransceiver<MockData>();
+        transv.Retransmit();
+
+        var local = new MockData(DateTimeOffset.UtcNow.AddHours(-1), 1);
+        var remote = new MockData(DateTime.UtcNow, 2);
+        transv.Local = local;
+        transv.Remote = remote;
+
+        // A new remote update arrived recently, so we should retransmit.
+        Assert.IsFalse(transv.Retransmit());
+    }
+
+    #endregion
 }

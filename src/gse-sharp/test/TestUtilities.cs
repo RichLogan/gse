@@ -1,0 +1,31 @@
+﻿using System;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace gs.sharp.test
+{
+    [TestClass]
+    public class TestUtilities
+    {
+        [TestMethod]
+        public void TestSetThenGet()
+        {
+            var now = DateTimeOffset.UtcNow;
+            var object1 = new Object1(1, now, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
+            DateTimeMs(now, object1.Timestamp);
+        }
+
+        [TestMethod]
+        public void TestTimeExtensions()
+        {
+            var now = DateTimeOffset.UtcNow;
+            var object1 = new Object1(1, now, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
+            var encoder = new Encoder(1500);
+            encoder.Encode(object1);
+            var decoder = new Decoder(encoder.GetDataLength(), encoder.DataBuffer);
+            (object decoded, Type type)? decoded = decoder.Decode();
+            DateTimeMs(now, ((Object1)decoded.Value.decoded).Timestamp);
+        }
+
+        private void DateTimeMs(DateTimeOffset a, DateTimeOffset b) => Assert.IsTrue(Math.Abs((b - a).TotalMilliseconds) < 1);
+    }
+}

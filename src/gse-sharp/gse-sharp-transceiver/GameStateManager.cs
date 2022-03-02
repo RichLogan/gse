@@ -92,6 +92,8 @@ namespace gs.sharp.transceiver
         {
             try
             {
+                DoLog(LogType.Debug, $"[{e.ID}] Message to send {e.Timestamp}");
+
                 // TODO: Is this correct to do per message?
                 // Encode.
                 var encoder = new Encoder(1500);
@@ -134,7 +136,7 @@ namespace gs.sharp.transceiver
                 if (result.Value.decoded is IMessage message)
                 {
                     // Pass to transceivers.
-                    DoLog(LogType.Debug, $"[{message.ID}] Got message");
+                    DoLog(LogType.Debug, $"[{message.ID}] Got timestamped message {message.Timestamp}");
                     if (_transcievers.TryGetValue(message, out IGameStateTransceiver transceiver))
                     {
                         // Pass the message to the transceiver.
@@ -193,7 +195,7 @@ namespace gs.sharp.transceiver
         /// </summary>
         /// <param name="transport">Transport to use.</param>
         /// <param name="interval">Interval at which to process all transcievers.</param>
-        public TimedGameStateManager(in IGameStateTransport transport, int interval) : base(transport)
+        public TimedGameStateManager(in IGameStateTransport transport, int interval, bool debugging = false) : base(transport, debugging)
         {
             _timer = new Timer(OnTimerElapsed, null, new Random().Next(MIN_START_TIME, MAX_START_TIME), interval);
         }
