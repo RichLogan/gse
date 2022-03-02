@@ -42,7 +42,7 @@ namespace gs.sharp.transceiver
         /// <param name="transport">Transport to use.</param>
         public GameStateManager(in IGameStateTransport transport, bool debugging = false)
         {
-            _transport = transport;
+            _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _debugging = debugging;
             _transport.OnMessageReceived += Transport_OnMessageReceived;
         }
@@ -52,10 +52,12 @@ namespace gs.sharp.transceiver
         /// </summary>
         /// <param name="id">Unique identifier.</param>
         /// <param name="transciever">The transciever to managed.</param>
-        public void Register(in IObject id, in IGameStateTransceiver transciever)
+        public void Register(in IObject id, in IGameStateTransceiver transceiver)
         {
-            transciever.MessageToSend += Transciever_MessageToSend;
-            _transcievers.Add(id, transciever);
+            if (id == null) throw new ArgumentNullException(nameof(id));
+            if (transceiver == null) throw new ArgumentNullException(nameof(transceiver));
+            transceiver.MessageToSend += Transciever_MessageToSend;
+            _transcievers.Add(id, transceiver);
         }
 
         /// <summary>

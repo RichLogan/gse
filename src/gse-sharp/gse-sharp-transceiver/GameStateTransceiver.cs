@@ -172,33 +172,76 @@ namespace gs.sharp.transceiver
         /// <inheritdoc/>
         public void Retransmit()
         {
+            if (_lastRetransmit == null)
+            {
+                // In this case, we'll wait one cycle for any remote updates to land.
+                DoLog(LogType.Debug, $"Waiting before retransmitting");
+                _retransmitting = false;
+                _lastRetransmit = DateTime.UtcNow;
+                return;
+            }
+
+            // Is there any data to retransmit?
             if (_lastLocal == null && _lastRemote == null)
             {
-                // There's nothing to retransmit right now, so we'll try again later.
+                DoLog(LogType.Debug, $"Nothing to retransmit");
                 _retransmitting = false;
+                _lastRetransmit = DateTime.UtcNow;
+                return;
             }
-            else if (_lastLocal.Value.Timestamp > _lastRemote.Value.Timestamp)
+
+            // Cases where we have a local update.
+            if (_lastLocal != null)
             {
-                // If we updated this last, we're responsible.
-                _retransmitting = true;
-            }
-            else if (_lastRemote.Value.Timestamp >= _lastLocal.Value.Timestamp)
-            {
-                // If we got an update recently, we're not responsible.
-                _retransmitting = false;
-            }
-            else if (_lastRetransmit != null)
-            {
-                // We wait at least one whole check before assuming responsibility.
+                // If there's no remote, assume responsibility.
                 if (_lastRemote == null)
                 {
-                    // If there has been no remote update, we'll assume responsibility.
+                    DoLog(LogType.Debug, $"Retransmitting (no remote)");
                     _retransmitting = true;
                 }
-                else if (_lastUpdateReceived != null && _lastRetransmit > _lastUpdateReceived)
+                // In these cases there is a local and a remote to compare.
+                else
                 {
-                    // If there has been no update since the last cycle, we'll assume responsibility.
+                    // If the local update is more recent, assume responsibility.
+                    if (_lastLocal.Value.Timestamp >= _lastRemote.Value.Timestamp)
+                    {
+                        DoLog(LogType.Debug, $"Retransmitting (local newer)");
+                        _retransmitting = true;
+                    }
+                    else
+                    {
+                        // If local is older, we'll assume only if the remote hasn't been seen
+                        // in a while. In this case, we'll take over the remote update as our own.
+                        if (_lastRetransmit > _lastUpdateReceived)
+                        {
+                            DoLog(LogType.Debug, $"Retransmitting (remote update expired)");
+                            _local = _lastLocal = _lastRemote;
+                            _retransmitting = true;
+                        }
+                        // Otherwise, we got a recent remote update so it's not our responsibility.
+                        else
+                        {
+                            DoLog(LogType.Debug, $"Not retransmitting (recent remote update)");
+                            _retransmitting = false;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Even if we have no local update,
+                // if the remote update hasn't been seen in a long time,
+                // we'll try and take it.
+                if (_lastUpdateReceived < _lastRetransmit)
+                {
+                    DoLog(LogType.Debug, $"Retransmitting (expired remote update (no local))");
+                    _local = _lastLocal = _lastRemote;
                     _retransmitting = true;
+                }
+                // We have no local update, so we can't retransmit.
+                else
+                {
+                    _retransmitting = false;
                 }
             }
 
