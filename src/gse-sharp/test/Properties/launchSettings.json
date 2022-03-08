@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "test": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "environmentVariables": {},
+      "distributionName": ""
+    }
+  }
+}

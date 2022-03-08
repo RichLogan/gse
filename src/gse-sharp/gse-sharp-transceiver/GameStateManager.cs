@@ -61,6 +61,20 @@ namespace gs.sharp.transceiver
         }
 
         /// <summary>
+        /// Unregister a transceiver from this manager.
+        /// </summary>
+        /// <param name="id">Unique identifier.</param>
+        public void Unregister(in IObject id)
+        {
+            if (id == null) throw new ArgumentNullException(nameof(id));
+            if (_transcievers.TryGetValue(id, out var transceiver))
+            {
+                transceiver.MessageToSend -= Transciever_MessageToSend;
+                _transcievers.Remove(id);
+            }
+        }
+
+        /// <summary>
         /// Get all transceivers to check retransmission.
         /// </summary>
         public void RetransmitAll()

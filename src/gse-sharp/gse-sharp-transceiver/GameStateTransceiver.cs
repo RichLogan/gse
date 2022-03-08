@@ -81,7 +81,7 @@ namespace gs.sharp.transceiver
                 // Only allow local updates to go forward in time.
                 if (_local.HasValue && _local.Value.Timestamp > value.Timestamp)
                 {
-                    throw new ArgumentException("Local updates must move forward in time", nameof(value));
+                    throw new ArgumentException($"Local updates must move forward in time. Existing: {_local.Value.Timestamp}, New: {value.Timestamp}", nameof(value));
                 }
 
                 // Send it.
