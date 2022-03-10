@@ -203,15 +203,18 @@ namespace gs.sharp.transceiver
     public class TimedGameStateManager : GameStateManager, IDisposable
     {
         private readonly Timer _timer;
+        private readonly int _maxInterval;
 
         /// <summary>
         /// Create a new GameStateManager object.
         /// </summary>
         /// <param name="transport">Transport to use.</param>
         /// <param name="interval">Interval at which to process all transcievers.</param>
-        public TimedGameStateManager(in IGameStateTransport transport, int interval, bool debugging = false) : base(transport, debugging)
+        public TimedGameStateManager(in IGameStateTransport transport, int minInterval, int maxInterval, bool debugging = false) : base(transport, debugging)
         {
-            _timer = new Timer(OnTimerElapsed, null, new Random().Next(MIN_START_TIME, MAX_START_TIME), interval);
+            _maxInterval = maxInterval;
+            var interval = new Random().Next(minInterval, maxInterval);
+            _timer = new Timer(OnTimerElapsed, null, 0, interval);
         }
 
         // To detect redundant calls

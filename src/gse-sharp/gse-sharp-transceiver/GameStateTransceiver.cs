@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace gs.sharp.transceiver
 {
@@ -42,7 +43,7 @@ namespace gs.sharp.transceiver
     }
 
     /// <summary>
-    /// Interface for a game state transciever, understanding local
+    /// Interface for a game state transceiver, understanding local
     /// and remote updates, and allowing the renderable result to be
     /// set. Expected to be managed from a <see cref="GameStateManager"/>.
     /// </summary>
@@ -131,6 +132,8 @@ namespace gs.sharp.transceiver
                 else
                 {
                     // Both have data, so we take the newest.
+                    Debug.Assert(_local != null, nameof(_local) + " != null");
+                    Debug.Assert(_remote != null, nameof(_remote) + " != null");
                     if (_local.Value.Timestamp >= _remote.Value.Timestamp)
                     {
                         DoLog(LogType.Debug, $"[{_local.Value.ID}] Rendered local as newer");
@@ -158,91 +161,97 @@ namespace gs.sharp.transceiver
         private T? _lastLocal = null;
         private T? _lastRemote = null;
         private DateTime? _lastUpdateReceived = null;
-        private DateTime? _lastRetransmit = null;
+        private DateTime? _lastRetransmitCheck = null;
 
-        // Logs.
+        // Internals.
+        private readonly int _expiryMs = 0;
         private readonly bool _debugging = false;
+
 
         /// <summary>
         /// Create a new transceiver.
         /// </summary>
+        /// <param name="expiryMs">Time in milliseconds after which updates
+        /// should be considered expired.</param>
         /// <param name="debugging">Try to log at the debug level.</param>
-        public GameStateTransceiver(bool debugging = false) => _debugging = debugging;
+        public GameStateTransceiver(int expiryMs, bool debugging = false)
+        {
+            _expiryMs = expiryMs;
+            _debugging = debugging;
+        }
 
         /// <inheritdoc/>
         public bool Retransmit()
         {
             // Do the retransmit if appropriate.
-            bool retransmitted = false;
+            var retransmitted = false;
             if (ShouldRetransmit())
             {
-                DoLog(LogType.Debug, $"[{_lastLocal.Value.ID}] Retransmitting");
-                MessageToSend?.Invoke(this, _lastLocal);
-                retransmitted = true;
+                if (_lastLocal != null)
+                {
+                    DoLog(LogType.Debug, $"[{_lastLocal.Value.ID}] Retransmitting");
+                    MessageToSend?.Invoke(this, _lastLocal);
+                    retransmitted = true;
+                }
+
             }
 
-            // Record the point at which we retransmitted.
-            _lastRetransmit = DateTime.UtcNow;
+            // Record the point at which we checked for retransmission.
+            _lastRetransmitCheck = DateTime.UtcNow;
             return retransmitted;
         }
 
         private bool ShouldRetransmit()
         {
-            if (_lastRetransmit == null)
+            var expired = DateTime.UtcNow.Subtract(TimeSpan.FromMilliseconds(_expiryMs));
+
+            if (_lastRetransmitCheck == null)
             {
                 // In this case, we'll wait one cycle for any remote updates to land.
                 DoLog(LogType.Debug, $"Waiting before retransmitting");
                 return false;
             }
 
-            // Is there any data to retransmit?
-            if (_lastLocal == null && _lastRemote == null)
+            // If there is an expired remote update, we might take it over.
+            if (_lastUpdateReceived < expired)
             {
-                DoLog(LogType.Debug, $"Nothing to retransmit");
-                return false;
-            }
-
-            // Cases where we have no local update.
-            if (_lastLocal == null)
-            {
-                // Even if we have no local update,
-                // if the remote update hasn't been seen in a long time,
-                // we'll try and take it.
-                if (_lastUpdateReceived < _lastRetransmit)
+                Debug.Assert(_lastUpdateReceived.HasValue);
+                Debug.Assert(_lastRemote.HasValue);
+                if (_lastLocal == null || _lastLocal.Value.Timestamp < _lastRemote.Value.Timestamp)
                 {
-                    DoLog(LogType.Debug, $"Retransmitting (expired remote update (no local))");
+                    // Take it over
+                    DoLog(LogType.Debug, $"Retransmitting (expired remote update)");
                     _local = _lastLocal = _lastRemote;
                     return true;
                 }
+            }
 
-                // We have no local update and a recent remote, don't retransmit.
+            // If there's no local at this point, there's nothing to do.
+            if (_lastLocal == null)
+            {
                 return false;
             }
 
-            // Finally, cases where we do have a local update.
+            // From here we do have a local update.
+            Debug.Assert(_lastLocal.HasValue);
 
-            // If there's no remote, assume responsibility.
             if (_lastRemote == null)
             {
+                // There's a local but no remote, assume responsibility.
                 DoLog(LogType.Debug, $"Retransmitting (no remote)");
                 return true;
             }
 
-            // In these cases there is a local and a remote to compare.
+            // Cases where we have both.
+            Debug.Assert(_lastLocal.HasValue);
+            Debug.Assert(_lastRemote.HasValue);
+            Debug.Assert(_lastUpdateReceived.HasValue);
 
-            // If the local update is more recent, assume responsibility.
-            if (_lastLocal.Value.Timestamp >= _lastRemote.Value.Timestamp)
+            // Standard contention case: If the local update is more recent, assume responsibility.
+            // TODO: Shouldn't this compare to when we RECEIVED the last local? Latency comes in here.
+            if (_lastLocal.Value.Timestamp > _lastRemote.Value.Timestamp)
             {
                 DoLog(LogType.Debug, $"Retransmitting (local newer {_lastLocal.Value.Timestamp} > {_lastRemote.Value.Timestamp})");
-                return true;
-            }
-
-            // If local is older, we'll assume only if the remote hasn't been seen
-            // in a while. In this case, we'll take over the remote update as our own.
-            if (_lastRetransmit > _lastUpdateReceived)
-            {
-                DoLog(LogType.Debug, $"Retransmitting (remote update expired)");
-                _local = _lastLocal = _lastRemote;
                 return true;
             }
 

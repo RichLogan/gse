@@ -1,5 +1,6 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
+using System.Threading;
 
 namespace gs.sharp.test;
 
@@ -9,6 +10,8 @@ using transceiver;
 [TestClass]
 public class TransceiverTests
 {
+    private const int EXPIRY_MS = 1000;
+
     private class MockTransport : IGameStateTransport
     {
         public event EventHandler<EncodedMessage>? OnMessageReceived;
@@ -46,7 +49,7 @@ public class TransceiverTests
         // A recent local update should take precedence
         // over a remote update.
         var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver<MockData>();
+        var transceiver = new GameStateTransceiver<MockData>(EXPIRY_MS);
         gsm.Register("1".AsIObject(), transceiver);
 
         // Old remote.
@@ -77,7 +80,7 @@ public class TransceiverTests
     public void TestRenderNoData()
     {
         var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver<MockData>();
+        var transceiver = new GameStateTransceiver<MockData>(EXPIRY_MS);
         gsm.Register("2".AsIObject(), transceiver);
         var render = transceiver.Render;
         Assert.AreEqual(default, render);
@@ -89,7 +92,7 @@ public class TransceiverTests
         // A recent remote update should take precedence
         // over a local update.
         var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver<MockData>();
+        var transceiver = new GameStateTransceiver<MockData>(EXPIRY_MS);
         gsm.Register("2".AsIObject(), transceiver);
 
         // Old local.
@@ -161,7 +164,8 @@ public class TransceiverTests
     public void RetransmitNoData()
     {
         // Setup and proc skipped retransmit.
-        var transv = new GameStateTransceiver<MockData>();
+        var transv = new GameStateTransceiver<MockData>(EXPIRY_MS, true);
+        transv.Log += (sender, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
         // No data, no retransmit.
@@ -172,7 +176,8 @@ public class TransceiverTests
     public void RetransmitLocalOnly()
     {
         // Setup and proc skipped retransmit.
-        var transv = new GameStateTransceiver<MockData>();
+        var transv = new GameStateTransceiver<MockData>(EXPIRY_MS, true);
+        transv.Log += (sender, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
         
         var local = new MockData(DateTime.UtcNow, 1);
@@ -186,7 +191,8 @@ public class TransceiverTests
     public void RetransmitRemoteOnly()
     {
         // Setup and proc skipped retransmit.
-        var transv = new GameStateTransceiver<MockData>();
+        var transv = new GameStateTransceiver<MockData>(EXPIRY_MS, true);
+        transv.Log += (sender, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
         var remote = new MockData(DateTime.UtcNow, 1);
@@ -200,7 +206,8 @@ public class TransceiverTests
     public void RetransmitLocalNewer()
     {
         // Setup and proc skipped retransmit.
-        var transv = new GameStateTransceiver<MockData>();
+        var transv = new GameStateTransceiver<MockData>(EXPIRY_MS, true);
+        transv.Log += (sender, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
         var local = new MockData(DateTime.UtcNow, 1);
@@ -216,7 +223,8 @@ public class TransceiverTests
     public void RetransmitRemoteNewer()
     {
         // Setup and proc skipped retransmit.
-        var transv = new GameStateTransceiver<MockData>();
+        var transv = new GameStateTransceiver<MockData>(EXPIRY_MS, true);
+        transv.Log += (sender, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
         var local = new MockData(DateTimeOffset.UtcNow.AddHours(-1), 1);
@@ -226,6 +234,40 @@ public class TransceiverTests
 
         // A new remote update arrived recently, so we should retransmit.
         Assert.IsFalse(transv.Retransmit());
+    }
+
+    [TestMethod]
+    public void ExpiredRemoteUpdateNoLocal()
+    {
+        // Setup and proc skipped retransmit.
+        var transv = new GameStateTransceiver<MockData>(EXPIRY_MS, true);
+        transv.Log += (sender, args) => Console.WriteLine(args.Message);
+        transv.Retransmit();
+
+        var remote = new MockData(DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(30)), 2);
+        transv.Remote = remote;
+        Thread.Sleep(EXPIRY_MS);
+
+        // The remote update hasn't been seen in a while, should takeover.
+        Assert.IsTrue(transv.Retransmit());
+    }
+
+    [TestMethod]
+    public void ExpiredRemoteUpdateOldLocal()
+    {
+        // Setup and proc skipped retransmit.
+        var transv = new GameStateTransceiver<MockData>(EXPIRY_MS, true);
+        transv.Log += (_, args) => Console.WriteLine(args.Message);
+        transv.Retransmit();
+
+        var local = new MockData(DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(31)), 2);
+        var remote = new MockData(DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(30)), 2);
+        transv.Local = local;
+        transv.Remote = remote;
+        Thread.Sleep(EXPIRY_MS);
+
+        // The remote update hasn't been seen in a while, and is newer than our local, should takeover.
+        Assert.IsTrue(transv.Retransmit());
     }
 
     #endregion

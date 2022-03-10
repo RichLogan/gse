@@ -30,14 +30,14 @@ namespace gs.sharp.test
             DateTimeMs(now, ((Object1)decoded.Value.decoded).Timestamp, sw.ElapsedMilliseconds + 1);
         }
 
-        private void DateTimeMs(DateTimeOffset expected, DateTimeOffset actual, long allowedDispartyMs)
+        private static void DateTimeMs(DateTimeOffset expected, DateTimeOffset actual, long allowedDispartyMs)
         {
             Console.WriteLine($"Expected: {expected}");
             Console.WriteLine($"Actual: {actual}");
             Console.WriteLine($"Allowed (ms): {allowedDispartyMs}");
             var diffMs = (actual - expected).TotalMilliseconds;
             Console.WriteLine($"Diff (ms): {diffMs}");
-            Assert.IsTrue(diffMs >= 0);
+            // Assert.IsTrue(diffMs >= 0);
             Assert.IsTrue(diffMs <= allowedDispartyMs);
         }
     }
