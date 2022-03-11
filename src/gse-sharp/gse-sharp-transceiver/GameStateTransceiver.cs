@@ -317,7 +317,7 @@ namespace gs.sharp.transceiver
                 return true;
             }
 
-            if (_lastRemote.Value.Timestamp > _lastLocal.Value.Timestamp)
+            if (_lastRemote.Value.Timestamp >= _lastLocal.Value.Timestamp)
             {
                 // We got a recent remote update so it's not our responsibility.
                 _reasons?.NoRecentRemote();
@@ -325,12 +325,7 @@ namespace gs.sharp.transceiver
                 return false;
             }
 
-            // What is this case?
-            if (_lastRemote.Value.Timestamp == _lastLocal.Value.Timestamp)
-            {
-                throw new InvalidOperationException("What is this case?");
-            }
-            throw new InvalidOperationException("We should not get here");
+            throw new InvalidOperationException("Could not resolve retransmit state");
         }
 
         private void DoLog(LogType level, string message)
