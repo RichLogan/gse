@@ -106,6 +106,14 @@ namespace gs.sharp.transceiver
                 if (Type == TransceiveType.ReceiveOnly)
                     throw new InvalidOperationException("Receive only should not set Local");
 
+                // Local updates shouldn't be in the future.
+                var now = DateTimeOffset.UtcNow;
+                if (value.Timestamp > now)
+                {
+                    throw new ArgumentException(
+                        $"Local updates shouldn't be in the future. Now: {now}, New: {value.Timestamp}");
+                }
+
                 // Only allow local updates to go forward in time.
                 if (_local.HasValue && _local.Value.Timestamp > value.Timestamp)
                 {
