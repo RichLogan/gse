@@ -29,6 +29,7 @@
 
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 // GSE Types.
 using VarUint = System.UInt64;
@@ -45,7 +46,7 @@ namespace gs.sharp
     }
 
     /// <summary>
-    /// This object is unix epoch timestamped.
+    /// This object is timestamped.
     /// </summary>
     public interface ITimestamped
     {
@@ -62,18 +63,40 @@ namespace gs.sharp
 
     public static class IObjectExtension
     {
-        public static IObject AsIObject(this string id) => new BaseObject(Convert.ToUInt64(id));
+        public static IObject AsIObject(this string id)
+        {
+            // TODO: Should probably not silently slice the id.
+            var @ulong = new byte[8];
+            Encoding.ASCII.GetBytes(id, 0, id.Length <= 8 ? id.Length : 8, @ulong, 0);
+            return new BaseObject(BitConverter.ToUInt64(@ulong, 0));
+        }
+
+        public static string ToAscii(this IObject obj) => Encoding.ASCII.GetString(BitConverter.GetBytes(obj.ID)).TrimEnd('\0');
     }
 
     internal static class TimeExtension
     {
-        // Time is lower 16bits ms from unix epoch.
-        public static DateTimeOffset ToDateTimeOffset(this Time1 time) => DateTimeOffset.FromUnixTimeMilliseconds(Convert.ToInt64(time));
+        public static DateTimeOffset ToDateTimeOffset(this Time1 time)
+        {
+            // Get bytes of incoming and current time.
+            byte[] incomingBytes = BitConverter.GetBytes(time);
+            byte[] nowBytes = BitConverter.GetBytes(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            // Apply the incoming bytes to the current time.
+            var offset = BitConverter.IsLittleEndian ? 0 : 6;
+            Buffer.BlockCopy(incomingBytes, 0, nowBytes, offset, 2);
+            return DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(nowBytes, 0));
+        }
     }
 
     internal static class DateTimeOffsetExtension
     {
-        public static Time1 ToTime1(this DateTimeOffset datetime) => BitConverter.ToUInt16(BitConverter.GetBytes(datetime.ToUnixTimeMilliseconds()), 0);
+        public static Time1 ToTime1(this DateTimeOffset datetime)
+        {
+            // Time1 is the lower 16 bits of epoch time in milliseconds.
+            var epochBytes = BitConverter.GetBytes(datetime.ToUnixTimeMilliseconds());
+            return BitConverter.ToUInt16(epochBytes, BitConverter.IsLittleEndian ? 0 : 6);
+        }
     }
 
     public readonly struct Head1 : IMessage

@@ -28,9 +28,6 @@ namespace gs.sharp.transceiver
         /// </summary>
         public event EventHandler<LogEventArgs> Log;
 
-        protected const int MIN_START_TIME = 500;
-        protected const int MAX_START_TIME = 1000;
-
         protected readonly Dictionary<IObject, IGameStateTransceiver> _transcievers = new Dictionary<IObject, IGameStateTransceiver>(new IObjectEqualityComparer());
         private readonly IGameStateTransport _transport;
         private readonly bool _debugging;
@@ -40,7 +37,8 @@ namespace gs.sharp.transceiver
         /// Create a new GameStateManager object.
         /// </summary>
         /// <param name="transport">Transport to use.</param>
-        public GameStateManager(in IGameStateTransport transport, bool debugging = false)
+        /// <param name="debugging">True to enable debug logs.</param>
+        public GameStateManager(IGameStateTransport transport, bool debugging = false)
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _debugging = debugging;
@@ -48,15 +46,15 @@ namespace gs.sharp.transceiver
         }
 
         /// <summary>
-        /// Register a transciever to this manager.
+        /// Register a transceiver to this manager.
         /// </summary>
         /// <param name="id">Unique identifier.</param>
-        /// <param name="transciever">The transciever to managed.</param>
-        public void Register(in IObject id, in IGameStateTransceiver transceiver)
+        /// <param name="transciever">The transceiver to managed.</param>
+        public void Register(IObject id, IGameStateTransceiver transceiver)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             if (transceiver == null) throw new ArgumentNullException(nameof(transceiver));
-            transceiver.MessageToSend += Transciever_MessageToSend;
+            transceiver.MessageToSend += Transceiver_MessageToSend;
             _transcievers.Add(id, transceiver);
         }
 
@@ -64,12 +62,12 @@ namespace gs.sharp.transceiver
         /// Unregister a transceiver from this manager.
         /// </summary>
         /// <param name="id">Unique identifier.</param>
-        public void Unregister(in IObject id)
+        public void Unregister(IObject id)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             if (_transcievers.TryGetValue(id, out var transceiver))
             {
-                transceiver.MessageToSend -= Transciever_MessageToSend;
+                transceiver.MessageToSend -= Transceiver_MessageToSend;
                 _transcievers.Remove(id);
             }
         }
@@ -79,12 +77,12 @@ namespace gs.sharp.transceiver
         /// </summary>
         public void RetransmitAll()
         {
-            // Process all transcievers.
-            foreach (var transciever in _transcievers.Values)
+            // Process all transceivers.
+            foreach (var transceiver in _transcievers.Values)
             {
                 try
                 {
-                    transciever.Retransmit();
+                    transceiver.Retransmit();
                 }
                 catch (Exception exception)
                 {
@@ -102,7 +100,7 @@ namespace gs.sharp.transceiver
             Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
         }
 
-        private void Transciever_MessageToSend(object sender, IMessage e)
+        private void Transceiver_MessageToSend(object sender, IMessage e)
         {
             try
             {
@@ -133,7 +131,7 @@ namespace gs.sharp.transceiver
                 (object decoded, Type type)? result = decoder.Decode();
                 if (!result.HasValue)
                 {
-                    // Failed to deocde anything from this message, but we are expecting find something at this point.
+                    // Failed to decode anything from this message, but we are expecting to find something at this point.
                     DoLog(LogType.Error, "Undecodable message");
                     return;
                 }
@@ -186,7 +184,7 @@ namespace gs.sharp.transceiver
                 {
                     foreach (var receiver in _transcievers.Values)
                     {
-                        receiver.MessageToSend -= Transciever_MessageToSend;
+                        receiver.MessageToSend -= Transceiver_MessageToSend;
                     }
                     _transcievers.Clear();
                 }
@@ -200,19 +198,21 @@ namespace gs.sharp.transceiver
     /// Derivative of <see cref="GameStateManager"/> that calculates
     /// on a timer.
     /// </summary>
-    public class TimedGameStateManager : GameStateManager, IDisposable
+    public class TimedGameStateManager : GameStateManager
     {
         private readonly Timer _timer;
-        private readonly int _maxInterval;
 
         /// <summary>
         /// Create a new GameStateManager object.
         /// </summary>
         /// <param name="transport">Transport to use.</param>
-        /// <param name="interval">Interval at which to process all transcievers.</param>
-        public TimedGameStateManager(in IGameStateTransport transport, int minInterval, int maxInterval, bool debugging = false) : base(transport, debugging)
+        /// <param name="minInterval">Min interval at which to process all transceivers.</param>
+        /// <param name="maxInterval">Max interval at which to process all transceivers.</param>
+        /// <param name="debugging">True to enable debug logs.</param>
+        public TimedGameStateManager(int minInterval, int maxInterval, IGameStateTransport transport, bool debugging = false) : base(transport, debugging)
         {
-            _maxInterval = maxInterval;
+            if (minInterval <= 0) throw new ArgumentException("Minimum interval should be >0");
+            if (maxInterval < minInterval) throw new ArgumentException("Maximum interval should greater than minimum interval");
             var interval = new Random().Next(minInterval, maxInterval);
             _timer = new Timer(OnTimerElapsed, null, 0, interval);
         }

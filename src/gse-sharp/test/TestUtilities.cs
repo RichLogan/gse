@@ -10,15 +10,15 @@ namespace gs.sharp.test
         [TestMethod]
         public void TestSetThenGet()
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(20));
             var object1 = new Object1(1, now, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
-            DateTimeMs(now, object1.Timestamp, 1);
+            Assert.AreEqual(now.ToUnixTimeMilliseconds(), object1.Timestamp.ToUnixTimeMilliseconds());
         }
 
         [TestMethod]
         public void TestTimeExtensions()
         {
-            var now = DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(20));
             var sw = new Stopwatch();
             sw.Start();
             var object1 = new Object1(1, now, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
@@ -27,18 +27,7 @@ namespace gs.sharp.test
             var decoder = new Decoder(encoder.GetDataLength(), encoder.DataBuffer);
             (object decoded, Type type)? decoded = decoder.Decode();
             sw.Stop();
-            DateTimeMs(now, ((Object1)decoded.Value.decoded).Timestamp, sw.ElapsedMilliseconds + 1);
-        }
-
-        private static void DateTimeMs(DateTimeOffset expected, DateTimeOffset actual, long allowedDispartyMs)
-        {
-            Console.WriteLine($"Expected: {expected}");
-            Console.WriteLine($"Actual: {actual}");
-            Console.WriteLine($"Allowed (ms): {allowedDispartyMs}");
-            var diffMs = (actual - expected).TotalMilliseconds;
-            Console.WriteLine($"Diff (ms): {diffMs}");
-            // Assert.IsTrue(diffMs >= 0);
-            Assert.IsTrue(diffMs <= allowedDispartyMs);
+            Assert.AreEqual(now.ToUnixTimeMilliseconds(), object1.Timestamp.ToUnixTimeMilliseconds());
         }
     }
 }
