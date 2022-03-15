@@ -28,7 +28,7 @@ namespace gs.sharp.transceiver
         /// </summary>
         public event EventHandler<LogEventArgs> Log;
 
-        protected readonly Dictionary<IObject, IGameStateTransceiver> _transcievers = new Dictionary<IObject, IGameStateTransceiver>(new IObjectEqualityComparer());
+        protected readonly Dictionary<IObject, IGameStateTransceiver<IMessage>> _transceivers = new Dictionary<IObject, IGameStateTransceiver<IMessage>>(new IObjectEqualityComparer());
         private readonly IGameStateTransport _transport;
         private readonly bool _debugging;
         private bool _disposedValue;
@@ -49,13 +49,13 @@ namespace gs.sharp.transceiver
         /// Register a transceiver to this manager.
         /// </summary>
         /// <param name="id">Unique identifier.</param>
-        /// <param name="transciever">The transceiver to managed.</param>
-        public void Register(IObject id, IGameStateTransceiver transceiver)
+        /// <param name="transceiver">The transceiver to managed.</param>
+        public void Register(IObject id, IGameStateTransceiver<IMessage> transceiver)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             if (transceiver == null) throw new ArgumentNullException(nameof(transceiver));
             transceiver.MessageToSend += Transceiver_MessageToSend;
-            _transcievers.Add(id, transceiver);
+            _transceivers.Add(id, transceiver);
         }
 
         /// <summary>
@@ -65,10 +65,10 @@ namespace gs.sharp.transceiver
         public void Unregister(IObject id)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
-            if (_transcievers.TryGetValue(id, out var transceiver))
+            if (_transceivers.TryGetValue(id, out var transceiver))
             {
                 transceiver.MessageToSend -= Transceiver_MessageToSend;
-                _transcievers.Remove(id);
+                _transceivers.Remove(id);
             }
         }
 
@@ -78,7 +78,7 @@ namespace gs.sharp.transceiver
         public void RetransmitAll()
         {
             // Process all transceivers.
-            foreach (var transceiver in _transcievers.Values)
+            foreach (var transceiver in _transceivers.Values)
             {
                 try
                 {
@@ -100,12 +100,10 @@ namespace gs.sharp.transceiver
             Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
         }
 
-        private void Transceiver_MessageToSend(object sender, IMessage e)
+        private void Transceiver_MessageToSend<T>(object sender, T e)
         {
             try
             {
-                DoLog(LogType.Debug, $"[{e.ID}] Message to send {e.Timestamp}");
-
                 // TODO: Is this correct to do per message?
                 // Encode.
                 var encoder = new Encoder(1500);
@@ -149,7 +147,7 @@ namespace gs.sharp.transceiver
                 {
                     // Pass to transceivers.
                     DoLog(LogType.Debug, $"[{message.ID}] Got timestamped message {message.Timestamp}");
-                    if (_transcievers.TryGetValue(message, out IGameStateTransceiver transceiver))
+                    if (_transceivers.TryGetValue(message, out IGameStateTransceiver<IMessage> transceiver))
                     {
                         // Pass the message to the transceiver.
                         transceiver.Remote = message;
@@ -182,11 +180,11 @@ namespace gs.sharp.transceiver
             {
                 if (disposing)
                 {
-                    foreach (var receiver in _transcievers.Values)
+                    foreach (var receiver in _transceivers.Values)
                     {
                         receiver.MessageToSend -= Transceiver_MessageToSend;
                     }
-                    _transcievers.Clear();
+                    _transceivers.Clear();
                 }
 
                 _disposedValue = true;
