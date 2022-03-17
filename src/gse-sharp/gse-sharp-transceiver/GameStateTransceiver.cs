@@ -10,6 +10,18 @@ namespace gs.sharp.transceiver
         SendOnly
     }
 
+    public readonly struct AuthoredObject
+    {
+        public readonly GSObject GSObject;
+        public readonly uint Author;
+
+        public AuthoredObject(GSObject gsObject, uint author)
+        {
+            GSObject = gsObject;
+            Author = author;
+        }
+    }
+
     public interface IGameStateTransceiver
     {
         /// <summary>
@@ -20,7 +32,7 @@ namespace gs.sharp.transceiver
         /// <summary>
         /// Callback when the transceiver wishes to send a message.
         /// </summary>
-        event EventHandler<GSObject> MessageToSend;
+        event EventHandler<AuthoredObject> MessageToSend;
 
         /// <summary>
         /// Mode of operation.
@@ -37,19 +49,19 @@ namespace gs.sharp.transceiver
         /// <summary>
         /// A provided local update.
         /// </summary>
-        GSObject Local { set; }
+        AuthoredObject Local { set; }
 
         /// <summary>
         /// Represents a remote update.
         /// </summary>
-        GSObject Remote { set; }
+        AuthoredObject Remote { set; }
 
         /// <summary>
         /// The update you should render at the moment
         /// this is called. Don't cache this. Returns null
         /// if nothing to do.
         /// </summary>
-        GSObject Render { get; }
+        AuthoredObject Render { get; }
     }
 
     public interface IRetransmitReasons
@@ -67,8 +79,9 @@ namespace gs.sharp.transceiver
     /// <typeparam name="T"></typeparam>
     public class GameStateTransceiver : IGameStateTransceiver
     {
-        private static IMessage IsMessage(GSObject gsObject)
+        private static IMessage IsMessage(AuthoredObject authored)
         {
+            var gsObject = authored.GSObject;
             switch (gsObject.Type)
             {
                 case (ulong)Tag.Head1:
@@ -83,6 +96,8 @@ namespace gs.sharp.transceiver
                     return default;
             }
         }
+
+        private static DateTimeOffset GetTimestamp(AuthoredObject authored) => GetTimestamp(authored.GSObject);
 
         private static DateTimeOffset GetTimestamp(GSObject gsObject)
         {
@@ -102,14 +117,14 @@ namespace gs.sharp.transceiver
         }
 
         /// <inheritdoc/>
-        public event EventHandler<GSObject> MessageToSend;
+        public event EventHandler<AuthoredObject> MessageToSend;
         /// <inheritdoc/>
         public event EventHandler<LogEventArgs> Log;
         /// <inheritdoc/>
         public TransceiveType Type { get; }
 
         /// <inheritdoc/>
-        public virtual GSObject Local
+        public virtual AuthoredObject Local
         {
             set
             {
@@ -144,7 +159,7 @@ namespace gs.sharp.transceiver
         }
 
         /// <inheritdoc/>
-        public GSObject Remote
+        public AuthoredObject Remote
         {
             set
             {
@@ -161,7 +176,7 @@ namespace gs.sharp.transceiver
         }
 
         /// <inheritdoc/>
-        public virtual GSObject Render
+        public virtual AuthoredObject Render
         {
             get
             {
@@ -169,7 +184,7 @@ namespace gs.sharp.transceiver
                 {
                     lock (_remoteLock)
                     {
-                        GSObject result;
+                        AuthoredObject result;
                         switch (Type)
                         {
                             case TransceiveType.SendOnly:
@@ -221,12 +236,12 @@ namespace gs.sharp.transceiver
         }
 
         // Data members.
-        protected GSObject _local;
-        protected GSObject _remote;
+        protected AuthoredObject _local;
+        protected AuthoredObject _remote;
 
         // Retransmit members.
-        protected GSObject _lastLocal;
-        protected GSObject _lastRemote;
+        protected AuthoredObject _lastLocal;
+        protected AuthoredObject _lastRemote;
         protected DateTimeOffset _lastLocalTime;
         protected DateTimeOffset _lastRemoteTime;
         protected DateTimeOffset _lastUpdateReceived;

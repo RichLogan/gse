@@ -6,10 +6,12 @@ namespace gs.sharp.transceiver
     {
         public readonly IntPtr Buffer;
         public readonly int Length;
-        public EncodedMessage(IntPtr buffer, int length)
+        public readonly uint Author;
+        public EncodedMessage(IntPtr buffer, int length, uint author)
         {
             Buffer = buffer;
             Length = length;
+            Author = author;
         }
     }
 

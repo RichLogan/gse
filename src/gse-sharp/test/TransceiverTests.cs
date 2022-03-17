@@ -16,6 +16,7 @@ public class TransceiverTests
     private class MockTransport : IGameStateTransport
     {
         public event EventHandler<EncodedMessage>? OnMessageReceived;
+        public uint LocalIdentifier { get; } = 1;
         public void Send(in EncodedMessage toSend) { }
         public void MockArrival(in EncodedMessage message) => OnMessageReceived?.Invoke(this, message);
     }
@@ -46,7 +47,7 @@ public class TransceiverTests
 
         // Old remote.
         var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
-        transceiver.Remote = new GSObject(remote);
+        transceiver.Remote = new AuthoredObject(new GSObject(remote), 1);
 
         // As this is a new update, we're expecting a
         // send event.
@@ -55,13 +56,13 @@ public class TransceiverTests
 
         // New local.
         var local = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
-        transceiver.Local = new GSObject(local);
+        transceiver.Local = new AuthoredObject(new GSObject(local), 1);
 
         // Execute.
         Assert.IsTrue(fired);
 
         // Validate.
-        Object1 captured = transceiver.Render.Object1;
+        Object1 captured = transceiver.Render.GSObject.Object1;
         Assert.AreNotEqual(default, captured);
         Assert.AreNotEqual(remote, captured);
         Assert.AreEqual(local, captured);
@@ -89,7 +90,7 @@ public class TransceiverTests
 
         // Old local.
         var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
-        transceiver.Local = new GSObject(local);
+        transceiver.Local = new AuthoredObject(new GSObject(local), 1);
 
         // As this is a new remote update, we're not expecting a
         // send event.
@@ -98,14 +99,14 @@ public class TransceiverTests
 
         // New remote.
         var remote = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
-        transceiver.Remote = new GSObject(remote);
+        transceiver.Remote = new AuthoredObject(new GSObject(remote), 2);
 
         // Execute.
         Assert.IsFalse(fired);
 
         var captured = transceiver.Render;
         Assert.AreNotEqual(default, captured);
-        var capturedObject = captured.Object1;
+        var capturedObject = captured.GSObject.Object1;
         Assert.AreNotEqual(local, capturedObject);
         Assert.AreEqual(remote, capturedObject);
         Assert.AreEqual(default, transceiver.Render);
@@ -113,12 +114,12 @@ public class TransceiverTests
 
     private class MockTransceiver : IGameStateTransceiver
     {
-        public GSObject Local { get; set; }
-        public GSObject Remote { get; set; }
-        public GSObject Render { get; }
+        public AuthoredObject Local { get; set; }
+        public AuthoredObject Remote { get; set; }
+        public AuthoredObject Render { get; }
         public TransceiveType Type { get; }
         public event EventHandler<LogEventArgs> Log;
-        public event EventHandler<GSObject> MessageToSend;
+        public event EventHandler<AuthoredObject> MessageToSend;
         public bool Retransmit() => false;
     }
 
@@ -137,7 +138,7 @@ public class TransceiverTests
         };
         var encoder = new Encoder(1500);
         encoder.Encode(new GSObject(fakeMessage));
-        var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength());
+        var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength(), 2);
 
         // Should fire the event.
         transport.MockArrival(encodedMessage);
@@ -151,7 +152,7 @@ public class TransceiverTests
         Assert.IsFalse(gotUnknownEvent);
 
         // That message should have made it through.
-        Assert.AreEqual(fakeMessage.ID, mockTransceiver.Remote.Object1.ID);
+        Assert.AreEqual(fakeMessage.ID, mockTransceiver.Remote.GSObject.Object1.ID);
     }
 
     [TestMethod]
@@ -173,7 +174,7 @@ public class TransceiverTests
         };
         var encoder = new Encoder(1500);
         encoder.Encode(new GSObject(obj));
-        var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength());
+        var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength(), 2);
 
         // Should fire the event.
         transport.MockArrival(encodedMessage);
@@ -187,7 +188,7 @@ public class TransceiverTests
         Assert.IsFalse(gotUnknownEvent);
 
         // That message should have made it through.
-        Assert.AreEqual(obj.Tag, mockTransceiver.Render.UnknownObject.Tag);
+        Assert.AreEqual(obj.Tag, mockTransceiver.Render.GSObject.UnknownObject.Tag);
 
         // Free the test object.
         Marshal.FreeHGlobal(ptr);
@@ -217,7 +218,7 @@ public class TransceiverTests
         transv.Retransmit();
 
         var local = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
-        transv.Local = new GSObject(local);
+        transv.Local = new AuthoredObject(new GSObject(local), 1);
 
         // Local only should retransmit.
         Assert.AreEqual(0, reasons.NoRemotes);
@@ -234,7 +235,7 @@ public class TransceiverTests
         transv.Retransmit();
 
         var remote = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
-        transv.Remote = new GSObject(remote);
+        transv.Remote = new AuthoredObject(new GSObject(remote), 2);
 
         // Recent remove only should not retransmit.
         Assert.IsFalse(transv.Retransmit());
@@ -250,9 +251,9 @@ public class TransceiverTests
         transv.Retransmit();
 
         var remote = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
-        transv.Remote = new GSObject(remote);
+        transv.Remote = new AuthoredObject(new GSObject(remote), 2);
         var local = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
-        transv.Local = new GSObject(local);
+        transv.Local = new AuthoredObject(new GSObject(local), 1);
 
         // We own the latest local update, so we should retransmit.
         Assert.AreEqual(0, reasons.NewerLocals);
@@ -270,9 +271,9 @@ public class TransceiverTests
         transv.Retransmit();
 
         var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMilliseconds(1)), new Loc1(), new Rot1(), new Loc1());
-        transv.Local = new GSObject(local);
+        transv.Local = new AuthoredObject(new GSObject(local), 1);
         var remote = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
-        transv.Remote = new GSObject(remote);
+        transv.Remote = new AuthoredObject(new GSObject(remote), 2);
 
         // A new remote update arrived recently, so we shouldn't retransmit.
         Assert.IsFalse(transv.Retransmit());
@@ -288,7 +289,7 @@ public class TransceiverTests
         transv.Retransmit();
 
         var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(30)), new Loc1(), new Rot1(), new Loc1());
-        transv.Remote = new GSObject(remote);
+        transv.Remote = new AuthoredObject(new GSObject(remote), 2);
         Thread.Sleep(EXPIRY_MS);
 
         // The remote update hasn't been seen in a while, should takeover.
@@ -308,8 +309,8 @@ public class TransceiverTests
 
         var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(31)), new Loc1(), new Rot1(), new Loc1());
         var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(30)), new Loc1(), new Rot1(), new Loc1());
-        transv.Local = new GSObject(local);
-        transv.Remote = new GSObject(remote);
+        transv.Local = new AuthoredObject(new GSObject(local), 1);
+        transv.Remote = new AuthoredObject(new GSObject(remote), 2);
         Thread.Sleep(EXPIRY_MS);
 
         // The remote update hasn't been seen in a while, and is newer than our local, should takeover.

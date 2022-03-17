@@ -124,14 +124,14 @@ namespace gs.sharp.transceiver
             Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
         }
 
-        private void Transceiver_MessageToSend(object sender, GSObject e)
+        private void Transceiver_MessageToSend(object sender, AuthoredObject e)
         {
             Encoder encoder;
             try
             {
                 // TODO: Is this correct to do per message?
                 encoder = new Encoder(1500);
-                encoder.Encode(e);
+                encoder.Encode(e.GSObject);
             }
             catch (Exception exception)
             {
@@ -142,7 +142,7 @@ namespace gs.sharp.transceiver
             // Send.
             try
             {
-                var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength());
+                var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength(), e.Author);
                 _transport.Send(encodedMessage);
             }
             catch (Exception exception)
@@ -192,7 +192,7 @@ namespace gs.sharp.transceiver
 
                 if (transceiver != null)
                 {
-                    transceiver.Remote = result;
+                    transceiver.Remote = new AuthoredObject(result, encoded.Author);
                 }
             }
             catch (Exception exception)
