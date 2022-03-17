@@ -70,6 +70,37 @@ public class TransceiverTests
     }
 
     [TestMethod]
+    public void TestPrerenderRenderLocal()
+    {
+        // A recent local update should take precedence
+        // over a remote update.
+        var gsm = new GameStateManager(new MockTransport());
+        var transceiver = new GameStateTransceiver(EXPIRY_MS, false, null, TransceiveType.Bidirectional, true);
+        gsm.Register("1".AsIObject(), transceiver);
+
+        // Old remote.
+        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
+        transceiver.Remote = new AuthoredObject(new GSObject(remote), 1);
+
+        // As this is a new update, we're expecting a
+        // send event.
+        bool fired = false;
+        transceiver.MessageToSend += (_, __) => fired = true;
+
+        // New local.
+        var local = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
+        transceiver.Local = new AuthoredObject(new GSObject(local), 1);
+
+        // Execute.
+        Assert.IsTrue(fired);
+
+        // Validate.
+        Object1 captured = transceiver.Render.GSObject.Object1;
+        Assert.AreEqual(default, captured);
+        Assert.AreNotEqual(remote, captured);
+    }
+
+    [TestMethod]
     public void TestRenderNoData()
     {
         var gsm = new GameStateManager(new MockTransport());

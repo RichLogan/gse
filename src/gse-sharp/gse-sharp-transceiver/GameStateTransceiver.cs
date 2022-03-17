@@ -185,9 +185,11 @@ namespace gs.sharp.transceiver
                     lock (_remoteLock)
                     {
                         AuthoredObject result;
+                        bool localResult = false;
                         switch (Type)
                         {
                             case TransceiveType.SendOnly:
+                                localResult = true;
                                 result = _local;
                                 break;
                             case TransceiveType.ReceiveOnly:
@@ -205,6 +207,7 @@ namespace gs.sharp.transceiver
                                     {
                                         // If local has data, but remote doesn't, use local.
                                         DoLog(LogType.Debug, "Rendered local as no remote update seen");
+                                        localResult = true;
                                         result = _local;
                                     }
                                     else if (!Default.Is(_remote) && Default.Is(_local))
@@ -218,7 +221,15 @@ namespace gs.sharp.transceiver
                                         // Both have data, so we take most recent set.
                                         Debug.Assert(!Default.Is(_local), nameof(_local) + " != null");
                                         Debug.Assert(!Default.Is(_remote), nameof(_remote) + " != null");
-                                        result = _lastRemoteTime > _lastLocalTime ? _remote : _local;
+                                        if (_lastRemoteTime > _lastLocalTime)
+                                        {
+                                            result = _remote;
+                                        }
+                                        else
+                                        {
+                                            localResult = true;
+                                            result = _local;
+                                        }
                                     }
                                     break;
                                 }
@@ -229,7 +240,7 @@ namespace gs.sharp.transceiver
                         // Remove old data, return the result.
                         _local = default;
                         _remote = default;
-                        return result;
+                        return _prerendered && localResult ? default : result;
                     }
                 }
             }
@@ -251,6 +262,7 @@ namespace gs.sharp.transceiver
         protected readonly int _expiryMs;
         protected readonly bool _debugging;
         protected readonly IRetransmitReasons _reasons;
+        protected readonly bool _prerendered;
 
         // Locks.
         protected readonly object _localLock = new object();
@@ -262,12 +274,13 @@ namespace gs.sharp.transceiver
         /// <param name="expiryMs">Time in milliseconds after which updates
         /// should be considered expired.</param>
         /// <param name="debugging">Try to log at the debug level.</param>
-        public GameStateTransceiver(int expiryMs, bool debugging = false, IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional)
+        public GameStateTransceiver(int expiryMs, bool debugging = false, IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional, bool prerendered = false)
         {
             _expiryMs = expiryMs;
             _debugging = debugging;
             _reasons = retransmitLog;
             Type = type;
+            _prerendered = prerendered;
         }
 
         /// <inheritdoc/>
