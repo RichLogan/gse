@@ -132,7 +132,6 @@ namespace gs.sharp.transceiver
                 // TODO: Is this correct to do per message?
                 encoder = new Encoder(1500);
                 encoder.Encode(e);
-                DoLog(LogType.Info, "Encoded");
             }
             catch (Exception exception)
             {
@@ -145,7 +144,6 @@ namespace gs.sharp.transceiver
             {
                 var encodedMessage = new EncodedMessage(encoder.DataBuffer, encoder.GetDataLength());
                 _transport.Send(encodedMessage);
-                DoLog(LogType.Info, "Encoded");
             }
             catch (Exception exception)
             {
@@ -173,9 +171,8 @@ namespace gs.sharp.transceiver
                 IGameStateTransceiver transceiver;
                 switch (type)
                 {
-                    case Tag.Unknown:
-                        transceiver = Handle(result.UnknownObject);
-                        break;
+                    case Tag.Invalid:
+                        throw new InvalidOperationException("Invalid tag");
                     case Tag.Hand1:
                         transceiver = Handle(result.Hand1);
                         break;
@@ -189,7 +186,8 @@ namespace gs.sharp.transceiver
                         transceiver = Handle(result.Head1);
                         break;
                     default:
-                        throw new NotImplementedException();
+                        transceiver = Handle(result.UnknownObject);
+                        break;
                 }
 
                 if (transceiver != null)

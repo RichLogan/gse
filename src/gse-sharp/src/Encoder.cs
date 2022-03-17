@@ -57,7 +57,7 @@ namespace gs.sharp
         public Encoder(int bufferSize)
         {
             DataBuffer = Marshal.AllocHGlobal(bufferSize);
-            var returnCode = NativeMethods.GSEncoderInit(out IntPtr handle, DataBuffer, (System.UInt64)bufferSize);
+            var returnCode = NativeMethods.GSEncoderInit(out IntPtr handle, DataBuffer, (ulong)bufferSize);
             _context = new EncoderContextHandle(handle);
             if (returnCode != 0)
             {
@@ -80,7 +80,6 @@ namespace gs.sharp
         /// <exception cref="ArgumentException">Unsupported type.</exception>
         public void Encode(GSObject toEncode)
         {
-            // var obj = GSObjectFactory.Make(toEncode);
             int result = -1;
             var handle = GCHandle.Alloc(toEncode, GCHandleType.Pinned);
             try

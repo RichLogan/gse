@@ -41,7 +41,6 @@ namespace gs.sharp
         Mesh1 = 0x8000,
         Hand2 = 0x8001,
         HeadIPD1 = 0x8002,
-        Unknown = 0x20,
     }
 
     public readonly struct Loc1

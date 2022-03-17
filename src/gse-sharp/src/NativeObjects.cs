@@ -413,8 +413,7 @@ namespace gs.sharp
 
         public GSObject(UnknownObject obj) : this()
         {
-            // TODO: Is this correct.
-            Type = (VarUint)Tag.Unknown;
+            Type = obj.Tag;
             UnknownObject = obj;
         }
 
@@ -429,50 +428,5 @@ namespace gs.sharp
     {
         public static bool Is<T>(in T instance) => EqualityComparer<T>.Default.Equals(instance, default);
         public static bool Is<T>(T instance) => EqualityComparer<T>.Default.Equals(instance, default);
-    }
-
-    /// <summary>
-    /// Helper factory for GSObject creation.
-    /// </summary>
-    internal class GSObjectFactory
-    {
-        /// <summary>
-        /// Wrap the given into a <see cref="GSObject"/>.
-        /// </summary>
-        /// <typeparam name="T">Type of object to wrap.</typeparam>
-        /// <param name="obj">Instance of object to wrap.</param>
-        /// <returns>GSObject.</returns>
-        /// <exception cref="ArgumentException">Unsupported object type.</exception>
-        public static GSObject Make<T>(T obj)
-        {
-            if (obj is Head1 head1)
-            {
-                return new GSObject(head1);
-            }
-            else if (obj is Hand1 hand1)
-            {
-                return new GSObject(hand1);
-            }
-            else if (obj is Mesh1 mesh)
-            {
-                return new GSObject(new Mesh1Ptr(mesh));
-            }
-            else if (obj is Hand2 hand2)
-            {
-                return new GSObject(hand2);
-            }
-            else if (obj is UnknownObject unknown)
-            {
-                return new GSObject(unknown);
-            }
-            else if (obj is Object1 @object)
-            {
-                return new GSObject(@object);
-            }
-            else
-            {
-                throw new ArgumentException("Unexpected object type: " + typeof(T), nameof(obj));
-            }
-        }
     }
 }

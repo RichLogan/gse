@@ -46,7 +46,6 @@ namespace gs.sharp
         public IntPtr DataBuffer { get; private set; }
 
         private readonly DecoderContextHandle _context;
-        private readonly bool _managedBuffer = false;
         private bool _disposedValue;
 
         /// <summary>
@@ -54,21 +53,11 @@ namespace gs.sharp
         /// </summary>
         /// <param name="bufferSize">Size of the buffer to create in bytes.</param>
         /// <exception cref="InvalidOperationException">Underlying decoder failure.</exception>
-        public Decoder(int bufferSize, IntPtr? buffer = null)
+        public Decoder(int bufferSize, IntPtr buffer)
         {
-            if (buffer == null)
-            {
-                // Create & manage our own buffer.
-                DataBuffer = Marshal.AllocHGlobal(bufferSize);
-                _managedBuffer = true;
-            }
-            else
-            {
-                // External buffer.
-                DataBuffer = buffer.Value;
-            }
-
-            var returnCode = NativeMethods.GSDecoderInit(out IntPtr handle, DataBuffer, (System.UInt64)bufferSize);
+            // External buffer.
+            DataBuffer = buffer;
+            var returnCode = NativeMethods.GSDecoderInit(out IntPtr handle, DataBuffer, (UInt64)bufferSize);
             _context = new DecoderContextHandle(handle);
             if (returnCode != 0)
             {
@@ -129,11 +118,6 @@ namespace gs.sharp
                 if (disposing)
                 {
                     _context?.Dispose();
-                    if (_managedBuffer)
-                    {
-                        // Free the buffer if managed directly.
-                        Marshal.FreeHGlobal(DataBuffer);
-                    }
                 }
                 _disposedValue = true;
             }

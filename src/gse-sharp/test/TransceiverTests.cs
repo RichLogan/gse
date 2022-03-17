@@ -160,7 +160,7 @@ public class TransceiverTests
         var data = new byte[] { 0x01, 0x02, };
         IntPtr ptr = Marshal.AllocHGlobal(data.Length);
         Marshal.Copy(data, 0, ptr, data.Length);
-        var obj = new UnknownObject((ulong)Tag.Unknown, (ulong)data.Length, ptr);
+        var obj = new UnknownObject(0x20, (ulong)data.Length, ptr);
         var transport = new MockTransport();
         var gsm = new GameStateManager(transport, true);
         gsm.Log += (_, log) => Console.WriteLine(log.Message);

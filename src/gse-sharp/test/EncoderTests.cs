@@ -179,7 +179,7 @@ public class EncoderTests
         var datasize = expected.Count - 2;
         IntPtr ptr = Marshal.AllocHGlobal(datasize);
         Marshal.Copy(expected.ToArray(), 2, ptr, datasize);
-        var obj = new UnknownObject((ulong)Tag.Unknown, (ulong)datasize, ptr);
+        var obj = new UnknownObject(0x20, (ulong)datasize, ptr);
 
         // Encode.
         PerformEncodeTest(expected, new GSObject[] { new GSObject(obj) });

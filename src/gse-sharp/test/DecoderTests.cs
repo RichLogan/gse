@@ -169,6 +169,42 @@ public class DecoderTests
         Assert.AreEqual(obj, result.Object1);
     }
 
+    private readonly struct Example
+    {
+        public readonly int Test;
+        public Example(int test) => Test = test;
+    }
+
+    [TestMethod]
+    public void TestEncodeDecodeUnknown()
+    {
+        var data = new Example(1234);
+        var size = Marshal.SizeOf(data);
+        IntPtr ptr = Marshal.AllocHGlobal(size);
+        Marshal.StructureToPtr(data, ptr, false);
+
+        // Bytes for later comparison.
+        var expected = new byte[size];
+        Marshal.Copy(ptr, expected, 0, size);
+
+        // Encode.
+        var encoder = new Encoder(1500);
+        encoder.Encode(new GSObject(new UnknownObject(0x20, (ulong)size, ptr)));
+        var writtenBytes = new byte[size + 2];
+        Marshal.Copy(encoder.DataBuffer, writtenBytes, 0, size + 2);
+        for (var i = 2; i <= size; i++)
+        {
+            Assert.AreEqual(expected[i - 2], writtenBytes[i]);
+        }
+
+        var decoder = new Decoder(1500, encoder.DataBuffer);
+        var obj = decoder.Decode().UnknownObject;
+        Assert.IsFalse(Default.Is(obj));
+        var output = Marshal.PtrToStructure<Example>(obj.Data);
+        Assert.AreEqual(data, output);
+        Assert.AreEqual(data.Test, output.Test);
+    }
+
     private GSObject PerformDecodeTest(byte[] expected)
     {
         GCHandle pin = GCHandle.Alloc(expected, GCHandleType.Pinned);
