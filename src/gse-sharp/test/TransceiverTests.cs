@@ -105,8 +105,9 @@ public class TransceiverTests
 
         var captured = transceiver.Render;
         Assert.AreNotEqual(default, captured);
-        Assert.AreNotEqual(local, captured);
-        Assert.AreEqual(remote, captured);
+        var capturedObject = captured.Object1;
+        Assert.AreNotEqual(local, capturedObject);
+        Assert.AreEqual(remote, capturedObject);
         Assert.AreEqual(default, transceiver.Render);
     }
 
@@ -161,7 +162,7 @@ public class TransceiverTests
         Marshal.Copy(data, 0, ptr, data.Length);
         var obj = new UnknownObject((ulong)Tag.Unknown, (ulong)data.Length, ptr);
         var transport = new MockTransport();
-        var gsm = new GameStateManager(transport);
+        var gsm = new GameStateManager(transport, true);
         gsm.Log += (_, log) => Console.WriteLine(log.Message);
         bool gotUnknownEvent = false;
         gsm.OnUnregisteredUnknown += (_, message) =>
@@ -268,7 +269,7 @@ public class TransceiverTests
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
-        var local = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
+        var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMilliseconds(1)), new Loc1(), new Rot1(), new Loc1());
         transv.Local = new GSObject(local);
         var remote = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
         transv.Remote = new GSObject(remote);

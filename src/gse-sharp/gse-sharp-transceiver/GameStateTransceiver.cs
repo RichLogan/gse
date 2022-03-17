@@ -348,7 +348,7 @@ namespace gs.sharp.transceiver
                     Debug.Assert(!Default.Is(_lastUpdateReceived));
 
                     // Retransmit if local more recently got that remote.
-                    if (_lastLocalTime > _lastRemoteTime)
+                    if (_lastLocalTime >= _lastRemoteTime)
                     {
                         DoLog(LogType.Debug, $"Retransmitting (local newer {_lastLocalTime} > {_lastRemoteTime})");
                         _reasons?.YesNewerLocal();

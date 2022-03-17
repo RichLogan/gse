@@ -206,7 +206,7 @@ namespace gs.sharp.transceiver
         private IGameStateTransceiver Handle(UnknownObject unknown)
         {
             DoLog(LogType.Debug, $"[Tag {unknown.Tag}] Got unknown object");
-            if (!_unknowns.TryGetValue(unknown.Tag, out var transceiver))
+            if (_unknowns.TryGetValue(unknown.Tag, out var transceiver))
             {
                 return transceiver;
             }
