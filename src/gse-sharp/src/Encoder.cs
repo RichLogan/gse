@@ -78,11 +78,11 @@ namespace gs.sharp
         /// <param name="toEncode">Instance to encode.</param>
         /// <exception cref="InvalidOperationException">Underlying failure.</exception>
         /// <exception cref="ArgumentException">Unsupported type.</exception>
-        public void Encode<T>(T toEncode)
+        public void Encode(GSObject toEncode)
         {
-            var obj = GSObjectFactory.Make(toEncode);
+            // var obj = GSObjectFactory.Make(toEncode);
             int result = -1;
-            var handle = GCHandle.Alloc(obj, GCHandleType.Pinned);
+            var handle = GCHandle.Alloc(toEncode, GCHandleType.Pinned);
             try
             {
                 result = NativeMethods.GSEncodeObject(_context, handle.AddrOfPinnedObject());

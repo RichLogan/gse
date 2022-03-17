@@ -80,7 +80,7 @@ namespace gs.sharp
         /// Attempt to fetch a decoded object.
         /// </summary>
         /// <returns>Tuple of object and type, if any available.</returns>
-        public (object decoded, Type type)? Decode()
+        public GSObject Decode()
         {
             // Attempt decode.
             int decoded = NativeMethods.GSDecodeObject(_context, out GSObject gsObject);
@@ -89,35 +89,37 @@ namespace gs.sharp
             switch (decoded)
             {
                 case -1:
-                    // TODO: Try and get error.
-                    throw new InvalidOperationException("Decode failed");
+                    var error = Marshal.PtrToStringAnsi(NativeMethods.GetDecoderError(_context));
+                    throw new InvalidOperationException($"Decode failed: {error}");
                 case 0:
-                    return null;
+                    return default;
                 case 1:
                     break;
                 default:
                     throw new InvalidOperationException("Unexpected decode return call: " + decoded);
             }
 
-            // Return the decoded object.
-            Tag tag = (Tag)gsObject.Type;
-            switch (tag)
-            {
-                case Tag.Object1:
-                    return (gsObject.Object1, typeof(Object1));
-                case Tag.Head1:
-                    return (gsObject.Head1, typeof(Head1));
-                case Tag.Hand1:
-                    return (gsObject.Hand1, typeof(Hand1));
-                case Tag.Hand2:
-                    return (gsObject.Hand2, typeof(Hand2));
-                case Tag.Mesh1:
-                    return (gsObject.Mesh1, typeof(Mesh1));
-                case Tag.Unknown:
-                    return (gsObject.UnknownObject, typeof(UnknownObject));
-                default:
-                    throw new InvalidOperationException("Unknown decoded object type");
-            }
+            return gsObject;
+
+            // // Return the decoded object.
+            // Tag tag = (Tag)gsObject.Type;
+            // switch (tag)
+            // {
+            //     case Tag.Object1:
+            //         return (gsObject.Object1, typeof(Object1));
+            //     case Tag.Head1:
+            //         return (gsObject.Head1, typeof(Head1));
+            //     case Tag.Hand1:
+            //         return (gsObject.Hand1, typeof(Hand1));
+            //     case Tag.Hand2:
+            //         return (gsObject.Hand2, typeof(Hand2));
+            //     case Tag.Mesh1:
+            //         return (gsObject.Mesh1, typeof(Mesh1));
+            //     case Tag.Unknown:
+            //         return (gsObject.UnknownObject, typeof(UnknownObject));
+            //     default:
+            //         throw new InvalidOperationException("Unknown decoded object type");
+            // }
         }
 
         protected virtual void Dispose(bool disposing)
@@ -162,7 +164,7 @@ namespace gs.sharp
             public static extern int GSDecodeObject(DecoderContextHandle context, out GSObject gsObjects);
 
             [DllImport(GSE_LIB_NAME)]
-            public static extern string GetDecoderError(DecoderContextHandle context);
+            public static extern IntPtr GetDecoderError(DecoderContextHandle context);
 
             [DllImport(GSE_LIB_NAME)]
             internal static extern int GSDecoderDestroy(IntPtr context);

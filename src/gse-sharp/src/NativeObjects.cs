@@ -174,7 +174,7 @@ namespace gs.sharp
         public readonly Rot2 Rotation;
     }
 
-    internal readonly struct Mesh1Ptr : IObject, IDisposable
+    public readonly struct Mesh1Ptr : IObject, IDisposable
     {
         public ObjectId ID => id;
 
@@ -355,31 +355,31 @@ namespace gs.sharp
     }
 
     [StructLayout(LayoutKind.Explicit)]
-    internal struct GSObject
+    public readonly struct GSObject
     {
         [FieldOffset(0)]
-        public VarUint Type;
+        public readonly VarUint Type;
 
         [FieldOffset(sizeof(VarUint))]
-        public Head1 Head1;
+        public readonly Head1 Head1;
 
         [FieldOffset(sizeof(VarUint))]
-        public Hand1 Hand1;
+        public readonly Hand1 Hand1;
 
         [FieldOffset(sizeof(VarUint))]
-        public Mesh1Ptr Mesh1;
+        public readonly Mesh1Ptr Mesh1;
 
         [FieldOffset(sizeof(VarUint))]
-        public Hand2 Hand2;
+        public readonly Hand2 Hand2;
 
         [FieldOffset(sizeof(VarUint))]
-        public HeadIPD1 HeadIPD1;
+        public readonly HeadIPD1 HeadIPD1;
 
         [FieldOffset(sizeof(VarUint))]
-        public UnknownObject UnknownObject;
+        public readonly UnknownObject UnknownObject;
 
         [FieldOffset(sizeof(VarUint))]
-        public Object1 Object1;
+        public readonly Object1 Object1;
 
         public GSObject(Head1 head) : this()
         {
@@ -422,7 +422,13 @@ namespace gs.sharp
         {
             Type = (VarUint)Tag.Object1;
             Object1 = obj;
-        }
+        }        
+    }
+
+    public static class Default
+    {
+        public static bool Is<T>(in T instance) => EqualityComparer<T>.Default.Equals(instance, default);
+        public static bool Is<T>(T instance) => EqualityComparer<T>.Default.Equals(instance, default);
     }
 
     /// <summary>

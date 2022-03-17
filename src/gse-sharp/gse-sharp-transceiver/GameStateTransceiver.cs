@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace gs.sharp.transceiver
@@ -11,13 +10,7 @@ namespace gs.sharp.transceiver
         SendOnly
     }
 
-    /// <summary>
-    /// Interface for a game state transceiver, understanding local
-    /// and remote updates, and allowing the renderable result to be
-    /// set. Expected to be managed from a <see cref="GameStateManager"/>.
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
-    public interface IGameStateTransceiver<T>
+    public interface IGameStateTransceiver
     {
         /// <summary>
         /// Log callback.
@@ -25,37 +18,38 @@ namespace gs.sharp.transceiver
         event EventHandler<LogEventArgs> Log;
 
         /// <summary>
-        /// A provided local update.
+        /// Callback when the transceiver wishes to send a message.
         /// </summary>
-        T Local { set; }
-
-        /// <summary>
-        /// Represents a remote update.
-        /// </summary>
-        T Remote { set; }
-
-        /// <summary>
-        /// The update you should render at the moment
-        /// this is called. Don't cache this. Returns null
-        /// if nothing to do.
-        /// </summary>
-        T Render { get; }
+        event EventHandler<GSObject> MessageToSend;
 
         /// <summary>
         /// Mode of operation.
         /// </summary>
+        /// <value></value>
         TransceiveType Type { get; }
-
-        /// <summary>
-        /// Fires when this transceiver wants to send a message.
-        /// </summary>
-        event EventHandler<T> MessageToSend;
 
         /// <summary>
         /// Retransmit if appropriate.
         /// </summary>
         /// <returns>True if retransmitted.</returns>
         bool Retransmit();
+
+        /// <summary>
+        /// A provided local update.
+        /// </summary>
+        GSObject Local { set; }
+
+        /// <summary>
+        /// Represents a remote update.
+        /// </summary>
+        GSObject Remote { set; }
+
+        /// <summary>
+        /// The update you should render at the moment
+        /// this is called. Don't cache this. Returns null
+        /// if nothing to do.
+        /// </summary>
+        GSObject Render { get; }
     }
 
     public interface IRetransmitReasons
@@ -67,22 +61,55 @@ namespace gs.sharp.transceiver
         void NoRecentRemote();
     }
 
-    /// <summary>
+    // <summary>
     /// Base implementation of a <see cref="IGameStateTransceiver{T}"/>.
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class GameStateMesageTransceiver<T> : IGameStateTransceiver<T>
-        where T : IMessage
+    public class GameStateTransceiver : IGameStateTransceiver
     {
+        private static IMessage IsMessage(GSObject gsObject)
+        {
+            switch (gsObject.Type)
+            {
+                case (ulong)Tag.Head1:
+                    return gsObject.Head1;
+                case (ulong)Tag.Hand1:
+                    return gsObject.Hand1;
+                case (ulong)Tag.Hand2:
+                    return gsObject.Hand2;
+                case (ulong)Tag.Object1:
+                    return gsObject.Object1;
+                default:
+                    return default;
+            }
+        }
+
+        private static DateTimeOffset GetTimestamp(GSObject gsObject)
+        {
+            switch (gsObject.Type)
+            {
+                case (ulong)Tag.Head1:
+                    return gsObject.Head1.Timestamp;
+                case (ulong)Tag.Hand1:
+                    return gsObject.Hand1.Timestamp;
+                case (ulong)Tag.Hand2:
+                    return gsObject.Hand2.Timestamp;
+                case (ulong)Tag.Object1:
+                    return gsObject.Object1.Timestamp;
+                default:
+                    return DateTimeOffset.UtcNow;
+            }
+        }
+
         /// <inheritdoc/>
-        public event EventHandler<T> MessageToSend;
+        public event EventHandler<GSObject> MessageToSend;
         /// <inheritdoc/>
         public event EventHandler<LogEventArgs> Log;
         /// <inheritdoc/>
         public TransceiveType Type { get; }
 
         /// <inheritdoc/>
-        public T Local
+        public virtual GSObject Local
         {
             set
             {
@@ -90,34 +117,34 @@ namespace gs.sharp.transceiver
                 if (Type == TransceiveType.ReceiveOnly)
                     throw new InvalidOperationException("Receive only should not set Local");
 
-                // Local updates shouldn't be in the future.
-                var now = DateTimeOffset.UtcNow;
-                if (value.Timestamp > now)
+                // Update.
+                var timestamp = GetTimestamp(value);
+                var now = DateTime.UtcNow;
+                if (timestamp > now)
                 {
                     throw new ArgumentException(
-                        $"Local updates shouldn't be in the future. Now: {now}, New: {value.Timestamp}");
+                        $"Local updates shouldn't be in the future. Now: {now}, New: {timestamp}");
                 }
 
                 lock (_localLock)
                 {
                     // Only allow local updates to go forward in time.
-                    if (!IsDefault(_local) && _local.Timestamp > value.Timestamp)
+                    if (_lastLocalTime > timestamp)
                     {
-                        throw new ArgumentException($"Local updates must move forward in time. Existing: {_local.Timestamp}, New: {value.Timestamp}", nameof(value));
+                        throw new ArgumentException($"Local updates must move forward in time. Existing: {_lastLocalTime}, New: {timestamp}", nameof(value));
                     }
-
-                    // Update.
                     _local = _lastLocal = value;
+                    _lastLocalTime = timestamp;
                 }
-                DoLog(LogType.Debug, $"[{value.ID}] Set local update");
 
                 // Send it.
+                DoLog(LogType.Debug, "Set local update");
                 MessageToSend?.Invoke(this, value);
             }
         }
 
         /// <inheritdoc/>
-        public T Remote
+        public GSObject Remote
         {
             set
             {
@@ -126,14 +153,15 @@ namespace gs.sharp.transceiver
                 lock (_remoteLock)
                 {
                     _lastUpdateReceived = DateTime.UtcNow;
-                    _remote = _lastRemote = (T)value;
+                    _lastRemoteTime = GetTimestamp(value);
+                    _remote = _lastRemote = value;
                 }
-                DoLog(LogType.Debug, $"[{value.ID}] Received remote update");
+                DoLog(LogType.Debug, "Received remote update");
             }
         }
 
         /// <inheritdoc/>
-        public T Render
+        public virtual GSObject Render
         {
             get
             {
@@ -141,7 +169,7 @@ namespace gs.sharp.transceiver
                 {
                     lock (_remoteLock)
                     {
-                        T result;
+                        GSObject result;
                         switch (Type)
                         {
                             case TransceiveType.SendOnly:
@@ -153,38 +181,29 @@ namespace gs.sharp.transceiver
                             case TransceiveType.Bidirectional:
                                 {
                                     // Priority for the non null value.
-                                    if (IsDefault(_local) && IsDefault(_remote))
+                                    if (Default.Is(_local) && Default.Is(_remote))
                                     {
                                         // If local and remote are empty, there's nothing to do.
                                         result = default;
                                     }
-                                    else if (!IsDefault(_local) && IsDefault(_remote))
+                                    else if (!Default.Is(_local) && Default.Is(_remote))
                                     {
                                         // If local has data, but remote doesn't, use local.
-                                        DoLog(LogType.Debug, $"[{_local.ID}] Rendered local as no remote update seen");
+                                        DoLog(LogType.Debug, "Rendered local as no remote update seen");
                                         result = _local;
                                     }
-                                    else if (!IsDefault(_remote) && IsDefault(_local))
+                                    else if (!Default.Is(_remote) && Default.Is(_local))
                                     {
                                         // If remote has data, but local doesn't, use remote.
-                                        DoLog(LogType.Debug, $"[{_remote.ID}] Rendered remote as no local update seen");
+                                        DoLog(LogType.Debug, "Rendered remote as no local update seen");
                                         result = _remote;
                                     }
                                     else
                                     {
-                                        // Both have data, so we take the newest.
-                                        Debug.Assert(!IsDefault(_local), nameof(_local) + " != null");
-                                        Debug.Assert(!IsDefault(_remote), nameof(_remote) + " != null");
-                                        if (_local.Timestamp >= _remote.Timestamp)
-                                        {
-                                            DoLog(LogType.Debug, $"[{_local.ID}] Rendered local as newer");
-                                            result = _local;
-                                        }
-                                        else
-                                        {
-                                            DoLog(LogType.Debug, $"[{_remote.ID}] Rendered remote as newer");
-                                            result = _remote;
-                                        }
+                                        // Both have data, so we take most recent set.
+                                        Debug.Assert(!Default.Is(_local), nameof(_local) + " != null");
+                                        Debug.Assert(!Default.Is(_remote), nameof(_remote) + " != null");
+                                        result = _lastRemoteTime > _lastLocalTime ? _remote : _local;
                                     }
                                     break;
                                 }
@@ -202,23 +221,25 @@ namespace gs.sharp.transceiver
         }
 
         // Data members.
-        private T _local;
-        private T _remote;
+        protected GSObject _local;
+        protected GSObject _remote;
 
         // Retransmit members.
-        private T _lastLocal;
-        private T _lastRemote;
-        private DateTime? _lastUpdateReceived;
-        private DateTime? _lastRetransmitCheck;
+        protected GSObject _lastLocal;
+        protected GSObject _lastRemote;
+        protected DateTimeOffset _lastLocalTime;
+        protected DateTimeOffset _lastRemoteTime;
+        protected DateTimeOffset _lastUpdateReceived;
+        protected DateTime? _lastRetransmitCheck;
 
         // Internals.
-        private readonly int _expiryMs;
-        private readonly bool _debugging;
-        private readonly IRetransmitReasons _reasons;
+        protected readonly int _expiryMs;
+        protected readonly bool _debugging;
+        protected readonly IRetransmitReasons _reasons;
 
         // Locks.
-        private readonly object _localLock = new object();
-        private readonly object _remoteLock = new object();
+        protected readonly object _localLock = new object();
+        protected readonly object _remoteLock = new object();
 
         /// <summary>
         /// Create a new transceiver.
@@ -226,7 +247,7 @@ namespace gs.sharp.transceiver
         /// <param name="expiryMs">Time in milliseconds after which updates
         /// should be considered expired.</param>
         /// <param name="debugging">Try to log at the debug level.</param>
-        public GameStateMesageTransceiver(int expiryMs, bool debugging = false, IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional)
+        public GameStateTransceiver(int expiryMs, bool debugging = false, IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional)
         {
             _expiryMs = expiryMs;
             _debugging = debugging;
@@ -243,9 +264,9 @@ namespace gs.sharp.transceiver
             {
                 lock (_localLock)
                 {
-                    if (!IsDefault(_lastLocal))
+                    if (!Default.Is(_lastLocal))
                     {
-                        DoLog(LogType.Debug, $"[{_lastLocal.ID}] Retransmitting");
+                        DoLog(LogType.Debug, "Retransmitting");
                         MessageToSend?.Invoke(this, _lastLocal);
                         retransmitted = true;
                     }
@@ -257,7 +278,7 @@ namespace gs.sharp.transceiver
             return retransmitted;
         }
 
-        private bool ShouldRetransmit()
+        protected virtual bool ShouldRetransmit()
         {
             // Some modes override retransmit behaviour.
             switch (Type)
@@ -284,33 +305,34 @@ namespace gs.sharp.transceiver
                 lock (_remoteLock)
                 {
                     // If there is an expired remote update, we might take it over.
-                    if (_lastUpdateReceived < expired)
+                    if (!Default.Is(_lastUpdateReceived) && _lastUpdateReceived < expired)
                     {
-                        Debug.Assert(_lastUpdateReceived.HasValue);
-                        Debug.Assert(!IsDefault(_lastRemote));
-                        if (IsDefault(_lastLocal) || _lastLocal.Timestamp < _lastRemote.Timestamp)
+                        Debug.Assert(!Default.Is(_lastRemote));
+                        if (Default.Is(_lastLocal) || _lastLocalTime < _lastUpdateReceived)
                         {
                             // Take it over.
                             _reasons?.YesExpiredRemote();
                             DoLog(LogType.Debug, $"Retransmitting (expired remote update)");
                             _local = _lastLocal = _lastRemote;
+                            _lastLocalTime = GetTimestamp(_lastRemote);
                             _lastRemote = default;
-                            _lastUpdateReceived = null;
+                            _lastRemoteTime = default;
+                            _lastUpdateReceived = default;
                             return true;
                         }
                     }
 
                     // If there's no local at this point, there's nothing to do.
-                    if (IsDefault(_lastLocal))
+                    if (Default.Is(_lastLocal))
                     {
                         _reasons?.NoNoLocal();
                         return false;
                     }
 
                     // From here we do have a local update.
-                    Debug.Assert(!IsDefault(_lastLocal));
+                    Debug.Assert(!Default.Is(_lastLocal));
 
-                    if (IsDefault(_lastRemote))
+                    if (Default.Is(_lastRemote))
                     {
                         // There's a local but no remote, assume responsibility.
                         _reasons?.YesNoRemote();
@@ -319,24 +341,25 @@ namespace gs.sharp.transceiver
                     }
 
                     // Cases where we have both.
-                    Debug.Assert(!IsDefault(_lastLocal));
-                    Debug.Assert(!IsDefault(_lastRemote));
-                    Debug.Assert(_lastUpdateReceived.HasValue);
+                    Debug.Assert(!Default.Is(_lastLocal));
+                    Debug.Assert(!Default.Is(_lastLocalTime));
+                    Debug.Assert(!Default.Is(_lastRemote));
+                    Debug.Assert(!Default.Is(_lastRemoteTime));
+                    Debug.Assert(!Default.Is(_lastUpdateReceived));
 
-                    // Standard contention case: If the local update is more recent, assume responsibility.
-                    // TODO: Shouldn't this compare to when we RECEIVED the last local? Latency comes in here.
-                    if (_lastLocal.Timestamp > _lastRemote.Timestamp)
+                    // Retransmit if local more recently got that remote.
+                    if (_lastLocalTime > _lastRemoteTime)
                     {
+                        DoLog(LogType.Debug, $"Retransmitting (local newer {_lastLocalTime} > {_lastRemoteTime})");
                         _reasons?.YesNewerLocal();
-                        DoLog(LogType.Debug, $"Retransmitting (local newer {_lastLocal.Timestamp} > {_lastRemote.Timestamp})");
                         return true;
                     }
 
-                    if (_lastRemote.Timestamp >= _lastLocal.Timestamp)
+                    if (_lastRemoteTime > _lastLocalTime)
                     {
                         // We got a recent remote update so it's not our responsibility.
                         _reasons?.NoRecentRemote();
-                        DoLog(LogType.Debug, $"Not retransmitting (remote newer {_lastRemote.Timestamp} >= {_lastLocal.Timestamp})");
+                        DoLog(LogType.Debug, $"Not retransmitting (remote newer {_lastRemoteTime} >= {_lastLocalTime})");
                         return false;
                     }
                 }
@@ -344,17 +367,78 @@ namespace gs.sharp.transceiver
             throw new InvalidOperationException("Could not resolve retransmit state");
         }
 
-        private void DoLog(LogType level, string message)
+        // private bool ShouldRetransmit(IMessage local, IMessage remote)
+        // {
+
+        //     lock (_localLock)
+        //     {
+        //         lock (_remoteLock)
+        //         {
+        //             // If there is an expired remote update, we might take it over.
+        //             if (_lastUpdateReceived < expired)
+        //             {
+        //                 Debug.Assert(_lastUpdateReceived.HasValue);
+        //                 Debug.Assert(!Default.Is(_lastRemote));
+        //                 if (Default.Is(_lastLocal) || _lastLocal.Timestamp < _lastRemote.Timestamp)
+        //                 {
+        //                     // Take it over.
+        //                     _reasons?.YesExpiredRemote();
+        //                     DoLog(LogType.Debug, $"Retransmitting (expired remote update)");
+        //                     _local = _lastLocal = _lastRemote;
+        //                     _lastRemote = default;
+        //                     _lastUpdateReceived = null;
+        //                     return true;
+        //                 }
+        //             }
+
+        //             // If there's no local at this point, there's nothing to do.
+        //             if (Default.Is(_lastLocal))
+        //             {
+        //                 _reasons?.NoNoLocal();
+        //                 return false;
+        //             }
+
+        //             // From here we do have a local update.
+        //             Debug.Assert(!Default.Is(_lastLocal));
+
+        //             if (Default.Is(_lastRemote))
+        //             {
+        //                 // There's a local but no remote, assume responsibility.
+        //                 _reasons?.YesNoRemote();
+        //                 DoLog(LogType.Debug, $"Retransmitting (no remote)");
+        //                 return true;
+        //             }
+
+        //             // Cases where we have both.
+        //             Debug.Assert(!Default.Is(_lastLocal));
+        //             Debug.Assert(!Default.Is(_lastRemote));
+        //             Debug.Assert(_lastUpdateReceived.HasValue);
+
+        //             // Standard contention case: If the local update is more recent, assume responsibility.
+        //             // TODO: Shouldn't this compare to when we RECEIVED the last local? Latency comes in here.
+        //             if (_lastLocal.Timestamp > _lastRemote.Timestamp)
+        //             {
+        //                 _reasons?.YesNewerLocal();
+        //                 DoLog(LogType.Debug, $"Retransmitting (local newer {_lastLocal.Timestamp} > {_lastRemote.Timestamp})");
+        //                 return true;
+        //             }
+
+        //             if (_lastRemote.Timestamp >= _lastLocal.Timestamp)
+        //             {
+        //                 // We got a recent remote update so it's not our responsibility.
+        //                 _reasons?.NoRecentRemote();
+        //                 DoLog(LogType.Debug, $"Not retransmitting (remote newer {_lastRemote.Timestamp} >= {_lastLocal.Timestamp})");
+        //                 return false;
+        //             }
+        //         }
+        //     }
+        //     throw new InvalidOperationException("Could not resolve retransmit state");
+        // }
+
+        protected void DoLog(LogType level, string message)
         {
             if (level == LogType.Debug && !_debugging) return;
             Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
         }
-
-        /// <summary>
-        /// Boxless comparison to "empty".
-        /// </summary>
-        /// <param name="value">Value</param>
-        /// <returns>True for empty/null/default, false if a reasonable value.</returns>
-        private static bool IsDefault(T value) => EqualityComparer<T>.Default.Equals(value, default);
     }
 }

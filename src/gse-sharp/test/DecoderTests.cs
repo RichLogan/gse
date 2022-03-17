@@ -45,16 +45,15 @@ public class DecoderTests
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00
-        }, typeof(Head1));
+        });
         Assert.IsNotNull(head1);
-        Head1 head = (Head1)head1;
-        Assert.IsFalse(head.IPDPresent);
+        Assert.IsFalse(head1.Head1.IPDPresent);
     }
 
     [TestMethod]
     public void TestDecodeHeadIPD()
     {
-        var headIPD = PerformDecodeTest(new byte[]
+        var gsObject = PerformDecodeTest(new byte[]
         {
             0x01, 0x27, 0x00, 0x05, 0x00, 0x3f, 0x8c, 0xcc,
             0xcd, 0x3e, 0x4c, 0xcc, 0xcd, 0x41, 0xf0, 0x00,
@@ -64,25 +63,25 @@ public class DecoderTests
 
             // ipd
             0xc0, 0x80, 0x02, 0x02, 0x42, 0x48
-        }, typeof(Head1));
-        Assert.IsNotNull(headIPD);
-        Head1 head = (Head1)headIPD;
+        });
+        Assert.IsFalse(Default.Is(gsObject));
+        Head1 head = gsObject.Head1;
         Assert.IsTrue(head.IPDPresent);
     }
 
     [TestMethod]
     public void TestDecodeUnknown()
     {
-        var unknown = PerformDecodeTest(new byte[]
+        var gsObject = PerformDecodeTest(new byte[]
         {
             0x20, 0x21, 0x00, 0x05, 0x00, 0x3f, 0x8c, 0xcc,
             0xcd, 0x3e, 0x4c, 0xcc, 0xcd, 0x41, 0xf0, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00
-        }, typeof(UnknownObject));
-        Assert.IsNotNull(unknown);
-        Assert.IsInstanceOfType(unknown, typeof(UnknownObject));
+        });
+        Assert.IsFalse(Default.Is(gsObject));
+        Assert.IsFalse(Default.Is(gsObject.Object1));
     }
 
     [TestMethod]
@@ -93,7 +92,7 @@ public class DecoderTests
     [TestMethod]
     public void TestDecodeHand2()
     {
-        var hand2 = PerformDecodeTest(new byte[]
+        var gsObject = PerformDecodeTest(new byte[]
         {
             // tag
             0xc0, 0x80, 0x01,
@@ -151,9 +150,9 @@ public class DecoderTests
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
-        }, typeof(Hand2));
-        Assert.IsNotNull(hand2);
-        Assert.IsInstanceOfType(hand2, typeof(Hand2));
+        });
+        Assert.IsFalse(Default.Is(gsObject));
+        Assert.IsFalse(Default.Is(gsObject.Hand2));
     }
 
     [TestMethod]
@@ -161,17 +160,16 @@ public class DecoderTests
     {
         var obj = new Object1(5, DateTimeOffset.UtcNow, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9), 10);
         var encoder = new Encoder(1500);
-        encoder.Encode(obj);
+        encoder.Encode(new GSObject(obj));
         var decoder = new Decoder(1500, encoder.DataBuffer);
-        (object decoded, Type type)? result = decoder.Decode();
+        GSObject result = decoder.Decode();
 
-        Assert.IsTrue(result.HasValue);
-        Assert.IsInstanceOfType(result.Value.decoded, result.Value.type);
-        var decodedObject = (Object1)result.Value.decoded;
-        Assert.AreEqual(obj, decodedObject);
+        Assert.IsFalse(Default.Is(result));
+        Assert.IsFalse(Default.Is(result.Object1));
+        Assert.AreEqual(obj, result.Object1);
     }
 
-    private object? PerformDecodeTest(byte[] expected, Type expectedType)
+    private GSObject PerformDecodeTest(byte[] expected)
     {
         GCHandle pin = GCHandle.Alloc(expected, GCHandleType.Pinned);
         try
@@ -179,17 +177,11 @@ public class DecoderTests
             // Decode.
             var decoder = new Decoder(expected.Length, pin.AddrOfPinnedObject());
             var result = decoder.Decode();
-            Assert.IsNotNull(result);
-            if (result == null) return null;
-
-            // Check type.
-            Assert.AreEqual(expectedType, result.Value.type);
-            var decodedObject = Convert.ChangeType(result.Value.decoded, result.Value.type);
-            Assert.IsNotNull(decodedObject);
+            Assert.IsFalse(Default.Is(result));
 
             // Encode.
             var encoder = new Encoder(expected.Length);
-            encoder.Encode(result.Value.decoded);
+            encoder.Encode(result);
 
             // Validate.
             Assert.AreEqual(expected.Length, encoder.GetDataLength());
@@ -204,13 +196,13 @@ public class DecoderTests
 
             // Verify next decode returns null.
             var nextDecode = decoder.Decode();
-            Assert.IsNull(nextDecode);
+            Assert.IsTrue(Default.Is(nextDecode));
 
             // Destroy decoder.
             decoder.Dispose();
 
             // Return the decoded object.
-            return decodedObject;
+            return result;
         }
         finally
         {

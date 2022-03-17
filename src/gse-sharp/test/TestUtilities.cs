@@ -23,11 +23,11 @@ namespace gs.sharp.test
             sw.Start();
             var object1 = new Object1(1, now, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
             var encoder = new Encoder(1500);
-            encoder.Encode(object1);
+            encoder.Encode(new GSObject(object1));
             var decoder = new Decoder(encoder.GetDataLength(), encoder.DataBuffer);
-            (object decoded, Type type)? decoded = decoder.Decode();
+            GSObject decoded = decoder.Decode();
             sw.Stop();
-            Assert.AreEqual(now.ToUnixTimeMilliseconds(), object1.Timestamp.ToUnixTimeMilliseconds());
+            Assert.AreEqual(now.ToUnixTimeMilliseconds(), decoded.Object1.Timestamp.ToUnixTimeMilliseconds());
         }
     }
 }
