@@ -10,7 +10,7 @@ namespace gs.sharp.test
         [TestMethod]
         public void TestSetThenGet()
         {
-            var now = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(20));
+            var now = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(1));
             var object1 = new Object1(1, now, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
             Assert.AreEqual(now.ToUnixTimeMilliseconds(), object1.Timestamp.ToUnixTimeMilliseconds());
         }

@@ -79,6 +79,7 @@ namespace gs.sharp
         public static DateTimeOffset ToDateTimeOffset(this Time1 time)
         {
             // TODO: Optimize for performance.
+            const int MAX_FUTURE = 32767;
 
             // Get bytes of incoming and current time.
             byte[] incomingBytes = BitConverter.GetBytes(time);
@@ -88,7 +89,7 @@ namespace gs.sharp
             var offset = BitConverter.IsLittleEndian ? 0 : 6;
             Buffer.BlockCopy(incomingBytes, 0, nowBytes, offset, 2);
             var constructed = DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(nowBytes, 0));
-            if (constructed >= DateTimeOffset.UtcNow)
+            if (constructed >= DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(MAX_FUTURE))
             {
                 nowBytes[BitConverter.IsLittleEndian ? 2 : 5] -= 1;
                 constructed = DateTimeOffset.FromUnixTimeMilliseconds(BitConverter.ToInt64(nowBytes, 0));

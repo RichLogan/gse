@@ -138,7 +138,7 @@ namespace gs.sharp.transceiver
                 if (timestamp > now)
                 {
                     throw new ArgumentException(
-                        $"Local updates shouldn't be in the future. Now: {now}, New: {timestamp}");
+                        $"Local updates shouldn't be in the future. Now: {now:HH:mm:ss.fff}, New: {timestamp:HH:mm:ss.fff}");
                 }
 
                 lock (_localLock)
@@ -146,7 +146,7 @@ namespace gs.sharp.transceiver
                     // Only allow local updates to go forward in time.
                     if (_lastLocalTime > timestamp)
                     {
-                        throw new ArgumentException($"Local updates must move forward in time. Existing: {_lastLocalTime}, New: {timestamp}", nameof(value));
+                        throw new ArgumentException($"Local updates must move forward in time. Existing: {_lastLocalTime:HH:mm:ss.fff}, New: {timestamp:HH:mm:ss.fff}", nameof(value));
                     }
                     _local = _lastLocal = value;
                     _lastLocalTime = timestamp;
@@ -197,36 +197,61 @@ namespace gs.sharp.transceiver
                                 break;
                             case TransceiveType.Bidirectional:
                                 {
+                                    var localIsDefault = Default.Is(_local);
+                                    var remoteIsDefault = Default.Is(_remote);
+
                                     // Priority for the non null value.
-                                    if (Default.Is(_local) && Default.Is(_remote))
+                                    if (localIsDefault && remoteIsDefault)
                                     {
                                         // If local and remote are empty, there's nothing to do.
                                         result = default;
                                     }
-                                    else if (!Default.Is(_local) && Default.Is(_remote))
+                                    else if (!localIsDefault && remoteIsDefault)
                                     {
                                         // If local has data, but remote doesn't, use local.
-                                        DoLog(LogType.Debug, "Rendered local as no remote update seen");
-                                        localResult = true;
-                                        result = _local;
+                                        // However, if local older than the last remote update we
+                                        // saw, we should ignore that.
+                                        if (!Default.Is(_lastRemoteTime) && _lastLocalTime < _lastRemoteTime)
+                                        {
+                                            DoLog(LogType.Debug, $"[{DateTime.UtcNow}] Ignoring local only as older than previous remote: {_lastLocalTime:HH:mm:ss.fff} < {_lastRemoteTime:HH:mm:ss.fff}");
+                                            result = default;
+                                        }
+                                        else
+                                        {
+                                            DoLog(LogType.Debug, "Rendered local as no remote update seen");
+                                            localResult = true;
+                                            result = _local;
+                                        }
                                     }
-                                    else if (!Default.Is(_remote) && Default.Is(_local))
+                                    else if (!remoteIsDefault && localIsDefault)
                                     {
                                         // If remote has data, but local doesn't, use remote.
-                                        DoLog(LogType.Debug, "Rendered remote as no local update seen");
-                                        result = _remote;
+                                        // However, if remote older than the last local update we
+                                        // saw, we should ignore that.
+                                        if (!Default.Is(_lastLocalTime) && _lastRemoteTime < _lastLocalTime)
+                                        {
+                                            DoLog(LogType.Debug, $"Ignoring remote only as older than previous local: {_lastRemoteTime:HH:mm:ss.fff} < {_lastLocalTime:HH:mm:ss.fff}");
+                                            result = default;
+                                        }
+                                        else
+                                        {
+                                            DoLog(LogType.Debug, "Rendered remote as no local update seen");
+                                            result = _remote;
+                                        }
                                     }
                                     else
                                     {
                                         // Both have data, so we take most recent set.
-                                        Debug.Assert(!Default.Is(_local), nameof(_local) + " != null");
-                                        Debug.Assert(!Default.Is(_remote), nameof(_remote) + " != null");
+                                        Debug.Assert(!localIsDefault, nameof(_local) + " != null");
+                                        Debug.Assert(!remoteIsDefault, nameof(_remote) + " != null");
                                         if (_lastRemoteTime > _lastLocalTime)
                                         {
+                                            DoLog(LogType.Debug, $"Rendered remote as newer {_lastRemoteTime:HH:mm:ss.fff} > {_lastLocalTime:HH:mm:ss.fff}");
                                             result = _remote;
                                         }
                                         else
                                         {
+                                            DoLog(LogType.Debug, $"Rendered local as newer {_lastLocalTime:HH:mm:ss.fff} > {_lastRemoteTime:HH:mm:ss.fff}");
                                             localResult = true;
                                             result = _local;
                                         }
@@ -332,11 +357,14 @@ namespace gs.sharp.transceiver
             {
                 lock (_remoteLock)
                 {
+                    var lastLocalIsDefault = Default.Is(_lastLocal);
+                    var lastRemoteIsDefault = Default.Is(_lastRemote);
+
                     // If there is an expired remote update, we might take it over.
                     if (!Default.Is(_lastUpdateReceived) && _lastUpdateReceived < expired)
                     {
-                        Debug.Assert(!Default.Is(_lastRemote));
-                        if (Default.Is(_lastLocal) || _lastLocalTime < _lastUpdateReceived)
+                        Debug.Assert(!lastRemoteIsDefault);
+                        if (lastLocalIsDefault || _lastLocalTime < _lastUpdateReceived)
                         {
                             // Take it over.
                             _reasons?.YesExpiredRemote();
@@ -351,16 +379,16 @@ namespace gs.sharp.transceiver
                     }
 
                     // If there's no local at this point, there's nothing to do.
-                    if (Default.Is(_lastLocal))
+                    if (lastLocalIsDefault)
                     {
                         _reasons?.NoNoLocal();
                         return false;
                     }
 
                     // From here we do have a local update.
-                    Debug.Assert(!Default.Is(_lastLocal));
+                    Debug.Assert(!lastLocalIsDefault);
 
-                    if (Default.Is(_lastRemote))
+                    if (lastRemoteIsDefault)
                     {
                         // There's a local but no remote, assume responsibility.
                         _reasons?.YesNoRemote();
@@ -369,25 +397,25 @@ namespace gs.sharp.transceiver
                     }
 
                     // Cases where we have both.
-                    Debug.Assert(!Default.Is(_lastLocal));
+                    Debug.Assert(!lastLocalIsDefault);
                     Debug.Assert(!Default.Is(_lastLocalTime));
-                    Debug.Assert(!Default.Is(_lastRemote));
+                    Debug.Assert(!lastRemoteIsDefault);
                     Debug.Assert(!Default.Is(_lastRemoteTime));
                     Debug.Assert(!Default.Is(_lastUpdateReceived));
 
                     // Retransmit if local more recently got that remote.
-                    if (_lastLocalTime >= _lastRemoteTime)
+                    if (_lastLocalTime > _lastRemoteTime)
                     {
-                        DoLog(LogType.Debug, $"Retransmitting (local newer {_lastLocalTime} > {_lastRemoteTime})");
+                        DoLog(LogType.Debug, $"Retransmitting (local newer {_lastLocalTime:HH:mm:ss.fff} > {_lastRemoteTime:HH:mm:ss.fff})");
                         _reasons?.YesNewerLocal();
                         return true;
                     }
 
-                    if (_lastRemoteTime > _lastLocalTime)
+                    if (_lastRemoteTime >= _lastLocalTime)
                     {
                         // We got a recent remote update so it's not our responsibility.
                         _reasons?.NoRecentRemote();
-                        DoLog(LogType.Debug, $"Not retransmitting (remote newer {_lastRemoteTime} >= {_lastLocalTime})");
+                        DoLog(LogType.Debug, $"Not retransmitting (remote newer {_lastRemoteTime:HH:mm:ss.fff} >= {_lastLocalTime:HH:mm:ss.fff})");
                         return false;
                     }
                 }
@@ -466,7 +494,7 @@ namespace gs.sharp.transceiver
         protected void DoLog(LogType level, string message)
         {
             if (level == LogType.Debug && !_debugging) return;
-            Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
+            Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = $"[{DateTime.UtcNow:HH:mm:ss.fff}] {message}" });
         }
     }
 }

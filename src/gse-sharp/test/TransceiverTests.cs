@@ -46,7 +46,7 @@ public class TransceiverTests
         gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old remote.
-        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
+        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(10)), new Loc1(), new Rot1(), new Loc1());
         transceiver.Remote = new AuthoredObject(new GSObject(remote), 1);
 
         // As this is a new update, we're expecting a
@@ -79,7 +79,7 @@ public class TransceiverTests
         gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old remote.
-        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
+        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(10)), new Loc1(), new Rot1(), new Loc1());
         transceiver.Remote = new AuthoredObject(new GSObject(remote), 1);
 
         // As this is a new update, we're expecting a
@@ -120,7 +120,7 @@ public class TransceiverTests
         gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old local.
-        var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
+        var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(10)), new Loc1(), new Rot1(), new Loc1());
         transceiver.Local = new AuthoredObject(new GSObject(local), 1);
 
         // As this is a new remote update, we're not expecting a
@@ -282,6 +282,7 @@ public class TransceiverTests
 
         var remote = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
         transv.Remote = new AuthoredObject(new GSObject(remote), 2);
+        Thread.Sleep(TimeSpan.FromMilliseconds(1));
         var local = new Object1(1, DateTimeOffset.UtcNow, new Loc1(), new Rot1(), new Loc1());
         transv.Local = new AuthoredObject(new GSObject(local), 1);
 
@@ -318,7 +319,7 @@ public class TransceiverTests
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
-        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(30)), new Loc1(), new Rot1(), new Loc1());
+        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(10)), new Loc1(), new Rot1(), new Loc1());
         transv.Remote = new AuthoredObject(new GSObject(remote), 2);
         Thread.Sleep(EXPIRY_MS);
 
@@ -337,8 +338,8 @@ public class TransceiverTests
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
-        var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(31)), new Loc1(), new Rot1(), new Loc1());
-        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(30)), new Loc1(), new Rot1(), new Loc1());
+        var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(11)), new Loc1(), new Rot1(), new Loc1());
+        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(10)), new Loc1(), new Rot1(), new Loc1());
         transv.Local = new AuthoredObject(new GSObject(local), 1);
         transv.Remote = new AuthoredObject(new GSObject(remote), 2);
         Thread.Sleep(EXPIRY_MS);
