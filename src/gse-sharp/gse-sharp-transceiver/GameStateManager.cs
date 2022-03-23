@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace gs.sharp.transceiver
@@ -22,7 +22,7 @@ namespace gs.sharp.transceiver
         /// Fired when we receive an update for an object
         /// we're not tracking.
         /// </summary>
-        public event EventHandler<IMessage> OnUnregisteredUpdate;
+        public event EventHandler<IObject> OnUnregisteredUpdate;
 
         /// <summary>
         /// Fired when we receive an UnknownObject update
@@ -35,8 +35,8 @@ namespace gs.sharp.transceiver
         /// </summary>
         public event EventHandler<LogEventArgs> Log;
 
-        private readonly Dictionary<IObject, IGameStateTransceiver> _transceivers = new Dictionary<IObject, IGameStateTransceiver>(new IObjectEqualityComparer());
-        private readonly Dictionary<ulong, IGameStateTransceiver> _unknowns = new Dictionary<ulong, IGameStateTransceiver>();
+        private readonly IDictionary<IObject, IDictionary<Tag, IGameStateTransceiver>> _transceivers = new Dictionary<IObject, IDictionary<Tag, IGameStateTransceiver>>(new IObjectEqualityComparer());
+        private readonly IDictionary<ulong, IList<IGameStateTransceiver>> _unknowns = new Dictionary<ulong, IList<IGameStateTransceiver>>();
         private readonly HashSet<IGameStateTransceiver> _allTransceivers = new HashSet<IGameStateTransceiver>();
         private readonly IGameStateTransport _transport;
         private readonly bool _debugging;
@@ -58,18 +58,29 @@ namespace gs.sharp.transceiver
         /// Register a transceiver to this manager.
         /// </summary>
         /// <param name="id">Unique identifier.</param>
+        /// <param name="tag">Tag this transceiver is interested in.</param>
         /// <param name="transceiver">The transceiver to managed.</param>
-        public void Register(IObject id, IGameStateTransceiver transceiver)
+        public void Register(IObject id, Tag tag, IGameStateTransceiver transceiver)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             SetupTransceiver(transceiver);
-            _transceivers.Add(id, transceiver);
+            if (!_transceivers.TryGetValue(id, out var transceivers))
+            {
+                transceivers = new Dictionary<Tag, IGameStateTransceiver>();
+                _transceivers.Add(id, transceivers);
+            }
+            transceivers.Add(tag, transceiver);
         }
 
         public void Register(ulong tag, IGameStateTransceiver transceiver)
         {
             SetupTransceiver(transceiver);
-            _unknowns.Add(tag, transceiver);
+            if (!_unknowns.TryGetValue(tag, out var transceivers))
+            {
+                transceivers = new List<IGameStateTransceiver>(1);
+                _unknowns.Add(tag, transceivers);
+            }
+            transceivers.Add(transceiver);
         }
 
         private void SetupTransceiver(IGameStateTransceiver transceiver)
@@ -83,15 +94,18 @@ namespace gs.sharp.transceiver
         }
 
         /// <summary>
-        /// Unregister a transceiver from this manager.
+        /// Unregister an object from this manager.
         /// </summary>
         /// <param name="id">Unique identifier.</param>
         public void Unregister(IObject id)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
-            if (_transceivers.TryGetValue(id, out var transceiver))
+            if (_transceivers.TryGetValue(id, out var transceivers))
             {
-                transceiver.MessageToSend -= Transceiver_MessageToSend;
+                foreach (var transceiver in transceivers)
+                {
+                    transceiver.Value.MessageToSend -= Transceiver_MessageToSend;
+                }
                 _transceivers.Remove(id);
             }
         }
@@ -130,7 +144,7 @@ namespace gs.sharp.transceiver
             try
             {
                 // TODO: Is this correct to do per message?
-                encoder = new Encoder(1500);
+                encoder = new Encoder(Marshal.SizeOf(e.GSObject));
                 encoder.Encode(e.GSObject);
             }
             catch (Exception exception)
@@ -167,32 +181,18 @@ namespace gs.sharp.transceiver
                     return;
                 }
 
-                Tag type = (Tag)result.Type;
-                IGameStateTransceiver transceiver;
-                switch (type)
+                IEnumerable<IGameStateTransceiver> transceivers = Handle(result);
+                if (transceivers != null)
                 {
-                    case Tag.Invalid:
-                        throw new InvalidOperationException("Invalid tag");
-                    case Tag.Hand1:
-                        transceiver = Handle(result.Hand1);
-                        break;
-                    case Tag.Hand2:
-                        transceiver = Handle(result.Hand2);
-                        break;
-                    case Tag.Head1:
-                        transceiver = Handle(result.Head1);
-                        break;
-                    case Tag.Object1:
-                        transceiver = Handle(result.Head1);
-                        break;
-                    default:
-                        transceiver = Handle(result.UnknownObject);
-                        break;
-                }
-
-                if (transceiver != null)
-                {
-                    transceiver.Remote = new AuthoredObject(result, encoded.Author);
+                    foreach (var transceiver in transceivers)
+                    {
+                        if (transceiver == null)
+                        {
+                            DoLog(LogType.Error, "Transceiver was null");
+                            continue;
+                        }
+                        transceiver.Remote = new AuthoredObject(result, encoded.Author);
+                    }
                 }
             }
             catch (Exception exception)
@@ -201,7 +201,7 @@ namespace gs.sharp.transceiver
             }
         }
 
-        private IGameStateTransceiver Handle(UnknownObject unknown)
+        private IEnumerable<IGameStateTransceiver> Handle(UnknownObject unknown)
         {
             DoLog(LogType.Debug, $"[Tag {unknown.Tag}] Got unknown object");
             if (_unknowns.TryGetValue(unknown.Tag, out var transceiver))
@@ -212,19 +212,62 @@ namespace gs.sharp.transceiver
             return null;
         }
 
-        private IGameStateTransceiver Handle(IMessage message)
+        private IGameStateTransceiver Handle(Tag type, IObject message)
         {
             // Pass to transceivers.
-            DoLog(LogType.Debug, $"[{message.ID}] Got timestamped message {message.Timestamp}");
-            if (_transceivers.TryGetValue(message, out var transceiver))
+            DoLog(LogType.Debug, $"[{message.ID}] Got Object");
+            if (_transceivers.TryGetValue(message, out var transceivers))
             {
                 // Pass the message to the transceiver.
-                return transceiver;
+                if (transceivers.TryGetValue(type, out IGameStateTransceiver transceiver))
+                {
+                    return transceiver;
+                }
             }
 
             // If we don't have a transceiver for this, fire the unknown event.
             OnUnregisteredUpdate?.Invoke(this, message);
             return null;
+        }
+
+        private IObject GetIObjectFromObject(GSObject obj)
+        {
+            var tag = (Tag)obj.Type;
+            switch (tag)
+            {
+                case Tag.Head1:
+                    return obj.Head1;
+                case Tag.Hand1:
+                    return obj.Hand1;
+                case Tag.Object1:
+                    return obj.Object1;
+                case Tag.Hand2:
+                    return obj.Hand2;
+                case Tag.Mesh1:
+                    return obj.Mesh1;
+                default:
+                    return null;
+            }
+        }
+
+        private IEnumerable<IGameStateTransceiver> Handle(GSObject obj)
+        {
+            var tag = (Tag)obj.Type;
+            if (tag == Tag.Invalid)
+            {
+                throw new InvalidOperationException("Invalid tag: " + tag);
+            }
+
+            // IObject types.
+            var iObject = GetIObjectFromObject(obj);
+            if (iObject != null)
+            {
+                var found = Handle(tag, iObject);
+                return found != null ? new[] { found } : null;
+            }
+
+            // Unknown.
+            return Handle(obj.UnknownObject);
         }
 
         // Protected implementation of Dispose pattern.
@@ -236,7 +279,10 @@ namespace gs.sharp.transceiver
                 {
                     foreach (var receiver in _transceivers.Values)
                     {
-                        receiver.MessageToSend -= Transceiver_MessageToSend;
+                        foreach (var transceiver in receiver.Values)
+                        {
+                            transceiver.MessageToSend -= Transceiver_MessageToSend;
+                        }
                     }
                     _transceivers.Clear();
                 }

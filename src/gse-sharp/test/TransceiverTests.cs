@@ -43,7 +43,7 @@ public class TransceiverTests
         // over a remote update.
         var gsm = new GameStateManager(new MockTransport());
         var transceiver = new GameStateTransceiver(EXPIRY_MS);
-        gsm.Register("1".AsIObject(), transceiver);
+        gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old remote.
         var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
@@ -76,7 +76,7 @@ public class TransceiverTests
         // over a remote update.
         var gsm = new GameStateManager(new MockTransport());
         var transceiver = new GameStateTransceiver(EXPIRY_MS, false, null, TransceiveType.Bidirectional, true);
-        gsm.Register("1".AsIObject(), transceiver);
+        gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old remote.
         var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
@@ -105,7 +105,7 @@ public class TransceiverTests
     {
         var gsm = new GameStateManager(new MockTransport());
         var transceiver = new GameStateTransceiver(EXPIRY_MS);
-        gsm.Register("2".AsIObject(), transceiver);
+        gsm.Register("2".AsIObject(), Tag.Object1, transceiver);
         var render = transceiver.Render;
         Assert.AreEqual(default, render);
     }
@@ -117,7 +117,7 @@ public class TransceiverTests
         // over a local update.
         var gsm = new GameStateManager(new MockTransport());
         var transceiver = new GameStateTransceiver(EXPIRY_MS);
-        gsm.Register("1".AsIObject(), transceiver);
+        gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old local.
         var local = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromMinutes(1)), new Loc1(), new Rot1(), new Loc1());
@@ -165,7 +165,6 @@ public class TransceiverTests
         {
             gotUnknownEvent = true;
             Assert.AreEqual(fakeMessage.ID, message.ID);
-            Assert.AreEqual(fakeMessage.Timestamp, message.Timestamp);
         };
         var encoder = new Encoder(1500);
         encoder.Encode(new GSObject(fakeMessage));
@@ -178,7 +177,7 @@ public class TransceiverTests
         // Registering should stop it firing.
         gotUnknownEvent = false;
         var mockTransceiver = new MockTransceiver();
-        gsm.Register(fakeMessage, mockTransceiver);
+        gsm.Register(fakeMessage, Tag.Object1, mockTransceiver);
         transport.MockArrival(encodedMessage);
         Assert.IsFalse(gotUnknownEvent);
 

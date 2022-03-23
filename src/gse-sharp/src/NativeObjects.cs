@@ -258,7 +258,7 @@ namespace gs.sharp
             Triangles = triangles;
         }
 
-        internal Mesh1(Mesh1Ptr pointers)
+        public Mesh1(Mesh1Ptr pointers)
         {
             id = pointers.ID;
 
