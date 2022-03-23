@@ -14,7 +14,7 @@ namespace gs.sharp.transceiver
 
     /// <summary>
     /// Manages <see cref="IGameStateTransceiver"/> through an <see cref="IGameStateTransport"/>,
-    /// sending, receiving and updating the render property for each transciever automatically.
+    /// sending, receiving and updating the render property for each transceiver automatically.
     /// </summary>
     public class GameStateManager : IDisposable
     {
@@ -124,7 +124,7 @@ namespace gs.sharp.transceiver
             Log?.Invoke(this, new LogEventArgs() { LogType = level, Message = message });
         }
 
-        private void Transceiver_MessageToSend(object sender, AuthoredObject e)
+        protected virtual void Transceiver_MessageToSend(object sender, AuthoredObject e)
         {
             Encoder encoder;
             try
@@ -253,6 +253,7 @@ namespace gs.sharp.transceiver
     public class TimedGameStateManager : GameStateManager
     {
         private readonly Timer _timer;
+        private bool _allowSend = false;
 
         /// <summary>
         /// Create a new GameStateManager object.
@@ -265,12 +266,24 @@ namespace gs.sharp.transceiver
         {
             if (minInterval <= 0) throw new ArgumentException("Minimum interval should be >0");
             if (maxInterval < minInterval) throw new ArgumentException("Maximum interval should greater than minimum interval");
+
+            // Setup retransmit timer.
             var interval = new Random().Next(minInterval, maxInterval);
-            _timer = new Timer(OnTimerElapsed, null, 0, interval);
+            _timer = new Timer(OnTimerElapsed, null, interval * 2, interval);
         }
 
         // To detect redundant calls
         private bool _disposedValue;
+
+        protected override void Transceiver_MessageToSend(object sender, AuthoredObject e)
+        {
+            // We wait for the retransmit timer to start before sending messages,
+            // so that we have some time to receive existing state from any peers.
+            if (!_allowSend) return;
+
+            // Encode and send.
+            base.Transceiver_MessageToSend(sender, e);
+        }
 
         // Protected implementation of Dispose pattern.
         protected override void Dispose(bool disposing)
@@ -289,6 +302,10 @@ namespace gs.sharp.transceiver
             base.Dispose(disposing);
         }
 
-        private void OnTimerElapsed(object state) => RetransmitAll();
+        private void OnTimerElapsed(object state)
+        {
+            _allowSend = true;
+            RetransmitAll();
+        }
     }
 }
