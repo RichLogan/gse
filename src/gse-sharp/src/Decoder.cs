@@ -88,27 +88,29 @@ namespace gs.sharp
                     throw new InvalidOperationException("Unexpected decode return call: " + decoded);
             }
 
-            return gsObject;
+            // Resolve timestamp as soon as possible, if appropriate.
+            var message = IsMessage(gsObject);
+            if (!Default.Is(message)) message.SaveTimestamp();
 
-            // // Return the decoded object.
-            // Tag tag = (Tag)gsObject.Type;
-            // switch (tag)
-            // {
-            //     case Tag.Object1:
-            //         return (gsObject.Object1, typeof(Object1));
-            //     case Tag.Head1:
-            //         return (gsObject.Head1, typeof(Head1));
-            //     case Tag.Hand1:
-            //         return (gsObject.Hand1, typeof(Hand1));
-            //     case Tag.Hand2:
-            //         return (gsObject.Hand2, typeof(Hand2));
-            //     case Tag.Mesh1:
-            //         return (gsObject.Mesh1, typeof(Mesh1));
-            //     case Tag.Unknown:
-            //         return (gsObject.UnknownObject, typeof(UnknownObject));
-            //     default:
-            //         throw new InvalidOperationException("Unknown decoded object type");
-            // }
+            // Return.
+            return gsObject;
+        }
+
+        private static IMessage IsMessage(GSObject gsObject)
+        {
+            switch (gsObject.Type)
+            {
+                case (ulong)Tag.Head1:
+                    return gsObject.Head1;
+                case (ulong)Tag.Hand1:
+                    return gsObject.Hand1;
+                case (ulong)Tag.Hand2:
+                    return gsObject.Hand2;
+                case (ulong)Tag.Object1:
+                    return gsObject.Object1;
+                default:
+                    return default;
+            }
         }
 
         protected virtual void Dispose(bool disposing)

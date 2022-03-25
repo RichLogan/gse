@@ -169,18 +169,27 @@ namespace gs.sharp.transceiver
         private void Transport_OnMessageReceived(object sender, EncodedMessage encoded)
         {
             DoLog(LogType.Debug, $"Got message of length {encoded.Length} from transport");
+            GSObject result;
             try
             {
                 // Decode.
                 var decoder = new Decoder(encoded.Length, encoded.Buffer);
-                GSObject result = decoder.Decode();
+                result = decoder.Decode();
                 if (Default.Is(result))
                 {
                     // Failed to decode anything from this message, but we are expecting to find something at this point.
                     DoLog(LogType.Error, "Undecodable message");
                     return;
                 }
+            }
+            catch (Exception exception)
+            {
+                DoLog(LogType.Error, $"Exception decoding message: {exception.Message}");
+                return;
+            }
 
+            try
+            {
                 IEnumerable<IGameStateTransceiver> transceivers = Handle(result);
                 if (transceivers != null)
                 {

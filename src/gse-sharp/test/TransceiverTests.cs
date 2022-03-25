@@ -42,7 +42,7 @@ public class TransceiverTests
         // A recent local update should take precedence
         // over a remote update.
         var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver(EXPIRY_MS);
+        var transceiver = new TimestampedGameStateTransceiver(EXPIRY_MS);
         gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old remote.
@@ -75,7 +75,7 @@ public class TransceiverTests
         // A recent local update should take precedence
         // over a remote update.
         var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver(EXPIRY_MS, false, null, TransceiveType.Bidirectional, true);
+        var transceiver = new TimestampedGameStateTransceiver(EXPIRY_MS, false, null, TransceiveType.Bidirectional, true);
         gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old remote.
@@ -104,7 +104,7 @@ public class TransceiverTests
     public void TestRenderNoData()
     {
         var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver(EXPIRY_MS);
+        var transceiver = new TimestampedGameStateTransceiver(EXPIRY_MS);
         gsm.Register("2".AsIObject(), Tag.Object1, transceiver);
         var render = transceiver.Render;
         Assert.AreEqual(default, render);
@@ -116,7 +116,7 @@ public class TransceiverTests
         // A recent remote update should take precedence
         // over a local update.
         var gsm = new GameStateManager(new MockTransport());
-        var transceiver = new GameStateTransceiver(EXPIRY_MS);
+        var transceiver = new TimestampedGameStateTransceiver(EXPIRY_MS);
         gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old local.
@@ -212,7 +212,7 @@ public class TransceiverTests
 
         // Registering should stop it firing.
         gotUnknownEvent = false;
-        var mockTransceiver = new GameStateTransceiver(expiryMs: 1);
+        var mockTransceiver = new TimestampedGameStateTransceiver(expiryMs: 1);
         gsm.Register(obj.Tag, mockTransceiver);
         transport.MockArrival(encodedMessage);
         Assert.IsFalse(gotUnknownEvent);
@@ -230,7 +230,7 @@ public class TransceiverTests
     public void RetransmitNoData()
     {
         // Setup and proc skipped retransmit.
-        var transv = new GameStateTransceiver(EXPIRY_MS, true);
+        var transv = new TimestampedGameStateTransceiver(EXPIRY_MS, true);
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
@@ -243,7 +243,7 @@ public class TransceiverTests
     {
         // Setup and proc skipped retransmit.
         var reasons = new MockRetransmitReason();
-        var transv = new GameStateTransceiver(EXPIRY_MS, true, reasons);
+        var transv = new TimestampedGameStateTransceiver(EXPIRY_MS, true, reasons);
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
@@ -260,7 +260,7 @@ public class TransceiverTests
     public void RetransmitRemoteOnly()
     {
         // Setup and proc skipped retransmit.
-        var transv = new GameStateTransceiver(EXPIRY_MS, true);
+        var transv = new TimestampedGameStateTransceiver(EXPIRY_MS, true);
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
@@ -276,7 +276,7 @@ public class TransceiverTests
     {
         // Setup and proc skipped retransmit.
         var reasons = new MockRetransmitReason();
-        var transv = new GameStateTransceiver(EXPIRY_MS, true, reasons);
+        var transv = new TimestampedGameStateTransceiver(EXPIRY_MS, true, reasons);
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
@@ -297,7 +297,7 @@ public class TransceiverTests
     {
         // Setup and proc skipped retransmit.
         var reasons = new MockRetransmitReason();
-        var transv = new GameStateTransceiver(EXPIRY_MS, true, reasons);
+        var transv = new TimestampedGameStateTransceiver(EXPIRY_MS, true, reasons);
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
@@ -315,7 +315,7 @@ public class TransceiverTests
     {
         // Setup and proc skipped retransmit.
         var reasons = new MockRetransmitReason();
-        var transv = new GameStateTransceiver(EXPIRY_MS, true, reasons);
+        var transv = new TimestampedGameStateTransceiver(EXPIRY_MS, true, reasons);
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 
@@ -334,7 +334,7 @@ public class TransceiverTests
     {
         // Setup and proc skipped retransmit.
         var reasons = new MockRetransmitReason();
-        var transv = new GameStateTransceiver(EXPIRY_MS, true, reasons);
+        var transv = new TimestampedGameStateTransceiver(EXPIRY_MS, true, reasons);
         transv.Log += (_, args) => Console.WriteLine(args.Message);
         transv.Retransmit();
 

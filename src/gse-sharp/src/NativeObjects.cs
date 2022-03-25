@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  BSD 2-Clause License
  *
  *  Copyright (c) 2022, Cisco Systems
@@ -28,6 +28,8 @@
  */
 
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -45,11 +47,76 @@ namespace gs.sharp
         ObjectId ID { get; }
     }
 
+    public class IObjectEqualityComparer : IEqualityComparer<IObject>
+    {
+        public bool Equals(IObject x, IObject y)
+        {
+            if (x == null && y == null)
+            {
+                return true;
+            }
+
+            if (x == null || y == null)
+            {
+                return false;
+            }
+
+            return x.ID == y.ID;
+        }
+
+        public int GetHashCode(IObject obj) => obj.ID.GetHashCode();
+    }
+
+    public class IMessageEqualityComparer : IEqualityComparer<IMessage>
+    {
+        public bool Equals(IMessage x, IMessage y)
+        {
+            if (x == null && y == null)
+            {
+                return true;
+            }
+
+            if (x == null || y == null)
+            {
+                return false;
+            }
+
+            return x.ID == y.ID && x.Short == y.Short;
+        }
+
+        public int GetHashCode(IMessage message) => (message.ID, message.Short).GetHashCode();
+    }
+
+    public static class TimestampLookup
+    {
+        public static ConcurrentDictionary<IMessage, DateTimeOffset> Timestamps = new ConcurrentDictionary<IMessage, DateTimeOffset>(new IMessageEqualityComparer());
+    }
+
+    public static class IMessageExtensions
+    {
+        public static void SaveTimestamp(this IMessage message)
+        {
+            var timestamp = message.Short.ToDateTimeOffset();
+            // TODO: This check isn't really valid if we can't clear up.
+            //if (TimestampLookup.Timestamps.TryGetValue(message, out var dateTime))
+            //{
+            //    var diff = Math.Abs((dateTime - timestamp).TotalMilliseconds);
+            //    if (diff > 1)
+            //    {
+            //        throw new InvalidOperationException(
+            //            $"Already have a timestamp for this with a different DateTime value. Existing: {dateTime:HH:mm:ss.fff} New: {timestamp:HH:mm:ss.fff}");
+            //    }
+            //}
+            TimestampLookup.Timestamps[message] = timestamp;
+        }
+    }
+
     /// <summary>
     /// This object is timestamped.
     /// </summary>
     public interface ITimestamped
     {
+        Time1 Short { get; }
         DateTimeOffset Timestamp { get; }
     }
 
@@ -112,7 +179,8 @@ namespace gs.sharp
     {
         public ObjectId ID => id;
         public bool IPDPresent => Convert.ToBoolean(ipdPresent);
-        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
+        public Time1 Short => Time;
+        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -138,7 +206,8 @@ namespace gs.sharp
     public readonly struct Object1 : IMessage
     {
         public ObjectId ID => id;
-        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
+        public Time1 Short => Time;
+        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -157,16 +226,19 @@ namespace gs.sharp
             Scale = scale;
             if (parent.HasValue)
             {
-                HasParent = Convert.ToByte(parent.HasValue);
+                HasParent = Convert.ToByte(true);
                 Parent = parent.Value;
             }
+
+            this.SaveTimestamp();
         }
     }
 
     public readonly struct Hand1 : IMessage
     {
         public ObjectId ID => id;
-        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
+        public Time1 Short => Time;
+        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -311,7 +383,8 @@ namespace gs.sharp
     public readonly struct Hand2 : IMessage
     {
         public ObjectId ID => id;
-        public DateTimeOffset Timestamp => Time.ToDateTimeOffset();
+        public Time1 Short => Time;
+        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -422,7 +495,7 @@ namespace gs.sharp
         {
             Type = (VarUint)Tag.Object1;
             Object1 = obj;
-        }        
+        }
     }
 
     public static class Default
