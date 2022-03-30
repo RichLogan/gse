@@ -90,6 +90,8 @@ namespace gs.sharp
     public static class TimestampLookup
     {
         public static ConcurrentDictionary<IMessage, DateTimeOffset> Timestamps = new ConcurrentDictionary<IMessage, DateTimeOffset>(new IMessageEqualityComparer());
+
+        public static void Remove(IMessage message) => Timestamps.TryRemove(message, out var _);
     }
 
     public static class IMessageExtensions
@@ -97,16 +99,15 @@ namespace gs.sharp
         public static void SaveTimestamp(this IMessage message)
         {
             var timestamp = message.Short.ToDateTimeOffset();
-            // TODO: This check isn't really valid if we can't clear up.
-            //if (TimestampLookup.Timestamps.TryGetValue(message, out var dateTime))
-            //{
-            //    var diff = Math.Abs((dateTime - timestamp).TotalMilliseconds);
-            //    if (diff > 1)
-            //    {
-            //        throw new InvalidOperationException(
-            //            $"Already have a timestamp for this with a different DateTime value. Existing: {dateTime:HH:mm:ss.fff} New: {timestamp:HH:mm:ss.fff}");
-            //    }
-            //}
+            if (TimestampLookup.Timestamps.TryGetValue(message, out var dateTime))
+            {
+                var diff = Math.Abs((dateTime - timestamp).TotalMilliseconds);
+                if (diff > 1)
+                {
+                    throw new InvalidOperationException(
+                        $"Already have a timestamp for this with a different DateTime value. Existing: {dateTime:HH:mm:ss.fff} New: {timestamp:HH:mm:ss.fff}");
+                }
+            }
             TimestampLookup.Timestamps[message] = timestamp;
         }
     }
@@ -114,7 +115,7 @@ namespace gs.sharp
     /// <summary>
     /// This object is timestamped.
     /// </summary>
-    public interface ITimestamped
+    public interface ITimestamped : IDisposable
     {
         Time1 Short { get; }
         DateTimeOffset Timestamp { get; }
@@ -201,6 +202,8 @@ namespace gs.sharp
                 IPD = new HeadIPD1(ipd.Value);
             }
         }
+
+        public void Dispose() => TimestampLookup.Remove(this);
     }
 
     public readonly struct Object1 : IMessage
@@ -232,6 +235,8 @@ namespace gs.sharp
 
             this.SaveTimestamp();
         }
+
+        public void Dispose() => TimestampLookup.Remove(this);
     }
 
     public readonly struct Hand1 : IMessage
@@ -245,6 +250,8 @@ namespace gs.sharp
         public readonly Bool Left;
         public readonly Loc2 Location;
         public readonly Rot2 Rotation;
+
+        public void Dispose() => TimestampLookup.Remove(this);
     }
 
     public readonly struct Mesh1Ptr : IObject, IDisposable
@@ -412,6 +419,8 @@ namespace gs.sharp
             Ring = ring;
             Pinky = pinky;
         }
+
+        public void Dispose() => TimestampLookup.Remove(this);
     }
 
     public readonly struct UnknownObject

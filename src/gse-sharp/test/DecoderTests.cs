@@ -48,6 +48,7 @@ public class DecoderTests
         });
         Assert.IsNotNull(head1);
         Assert.IsFalse(head1.Head1.IPDPresent);
+        head1.Head1.Dispose();
     }
 
     [TestMethod]
@@ -67,6 +68,7 @@ public class DecoderTests
         Assert.IsFalse(Default.Is(gsObject));
         Head1 head = gsObject.Head1;
         Assert.IsTrue(head.IPDPresent);
+        gsObject.Head1.Dispose();
     }
 
     [TestMethod]
@@ -82,6 +84,7 @@ public class DecoderTests
         });
         Assert.IsFalse(Default.Is(gsObject));
         Assert.IsFalse(Default.Is(gsObject.Object1));
+        gsObject.Object1.Dispose();
     }
 
     [TestMethod]
@@ -153,6 +156,7 @@ public class DecoderTests
         });
         Assert.IsFalse(Default.Is(gsObject));
         Assert.IsFalse(Default.Is(gsObject.Hand2));
+        gsObject.Hand2.Dispose();
     }
 
     [TestMethod]
@@ -167,6 +171,7 @@ public class DecoderTests
         Assert.IsFalse(Default.Is(result));
         Assert.IsFalse(Default.Is(result.Object1));
         Assert.AreEqual(obj, result.Object1);
+        result.Object1.Dispose();
     }
 
     private readonly struct Example
@@ -189,7 +194,9 @@ public class DecoderTests
 
         // Encode.
         var encoder = new Encoder(1500);
-        encoder.Encode(new GSObject(new UnknownObject(0x20, (ulong)size, ptr)));
+        var obj = new GSObject(new UnknownObject(0x20, (ulong)size, ptr));
+        encoder.Encode(obj);
+        obj.Object1.Dispose();
         var writtenBytes = new byte[size + 2];
         Marshal.Copy(encoder.DataBuffer, writtenBytes, 0, size + 2);
         for (var i = 2; i <= size; i++)
@@ -198,9 +205,9 @@ public class DecoderTests
         }
 
         var decoder = new Decoder(1500, encoder.DataBuffer);
-        var obj = decoder.Decode().UnknownObject;
-        Assert.IsFalse(Default.Is(obj));
-        var output = Marshal.PtrToStructure<Example>(obj.Data);
+        var decoded = decoder.Decode().UnknownObject;
+        Assert.IsFalse(Default.Is(decoded));
+        var output = Marshal.PtrToStructure<Example>(decoded.Data);
         Assert.AreEqual(data, output);
         Assert.AreEqual(data.Test, output.Test);
     }

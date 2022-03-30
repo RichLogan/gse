@@ -15,6 +15,7 @@ namespace gs.sharp.test
             var now = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(1));
             var object1 = new Object1(1, now, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
             Assert.AreEqual(now.ToUnixTimeMilliseconds(), object1.Timestamp.ToUnixTimeMilliseconds());
+            object1.Dispose();
         }
 
         [TestMethod]
@@ -30,6 +31,7 @@ namespace gs.sharp.test
             GSObject decoded = decoder.Decode();
             sw.Stop();
             Assert.AreEqual(now.ToUnixTimeMilliseconds(), decoded.Object1.Timestamp.ToUnixTimeMilliseconds());
+            object1.Dispose();
         }
 
         public readonly struct TimestampedObject : IMessage
@@ -53,6 +55,8 @@ namespace gs.sharp.test
                 this.id = id;
                 this.time = time;
             }
+
+            public void Dispose() => TimestampLookup.Timestamps.TryRemove(this, out var _);
         }
 
         [TestMethod]
@@ -65,6 +69,9 @@ namespace gs.sharp.test
             Assert.IsTrue(dictionary.ContainsKey(b));
             Assert.AreEqual(a.ID, dictionary[a]);
             Assert.AreEqual(a.ID, dictionary[b]);
+
+            a.Dispose();
+            b.Dispose();
         }
 
         //[TestMethod]
