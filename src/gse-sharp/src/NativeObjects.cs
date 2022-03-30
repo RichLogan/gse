@@ -89,9 +89,33 @@ namespace gs.sharp
 
     public static class TimestampLookup
     {
-        public static ConcurrentDictionary<IMessage, DateTimeOffset> Timestamps = new ConcurrentDictionary<IMessage, DateTimeOffset>(new IMessageEqualityComparer());
+        private static readonly ConcurrentDictionary<IMessage, DateTimeOffset> _timestamps = new ConcurrentDictionary<IMessage, DateTimeOffset>(new IMessageEqualityComparer());
 
-        public static void Remove(IMessage message) => Timestamps.TryRemove(message, out var _);
+        public static void Save(IMessage message, DateTimeOffset timestamp)
+        {
+            //if (_timestamps.TryGetValue(message, out var dateTime))
+            //{
+            //    var diff = Math.Abs((dateTime - timestamp).TotalMilliseconds);
+            //    if (diff > 1)
+            //    {
+            //        throw new InvalidOperationException(
+            //            $"Already have a timestamp for this with a different DateTime value. Existing: {dateTime:HH:mm:ss.fff} New: {timestamp:HH:mm:ss.fff}");
+            //    }
+            //}
+            _timestamps[message] = timestamp;
+        }
+
+        public static DateTimeOffset Get(IMessage message)
+        {
+            if (_timestamps.TryGetValue(message, out var time))
+            {
+                return time;
+            }
+
+            throw new InvalidOperationException("Missing timestamp for: " + message.ID);
+        }
+
+        public static void Remove(IMessage message) => _timestamps.TryRemove(message, out var _);
     }
 
     public static class IMessageExtensions
@@ -99,16 +123,7 @@ namespace gs.sharp
         public static void SaveTimestamp(this IMessage message)
         {
             var timestamp = message.Short.ToDateTimeOffset();
-            if (TimestampLookup.Timestamps.TryGetValue(message, out var dateTime))
-            {
-                var diff = Math.Abs((dateTime - timestamp).TotalMilliseconds);
-                if (diff > 1)
-                {
-                    throw new InvalidOperationException(
-                        $"Already have a timestamp for this with a different DateTime value. Existing: {dateTime:HH:mm:ss.fff} New: {timestamp:HH:mm:ss.fff}");
-                }
-            }
-            TimestampLookup.Timestamps[message] = timestamp;
+            TimestampLookup.Save(message, timestamp);
         }
     }
 
@@ -181,7 +196,7 @@ namespace gs.sharp
         public ObjectId ID => id;
         public bool IPDPresent => Convert.ToBoolean(ipdPresent);
         public Time1 Short => Time;
-        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
+        public DateTimeOffset Timestamp => TimestampLookup.Get(this);
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -210,7 +225,7 @@ namespace gs.sharp
     {
         public ObjectId ID => id;
         public Time1 Short => Time;
-        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
+        public DateTimeOffset Timestamp => TimestampLookup.Get(this);
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -243,7 +258,7 @@ namespace gs.sharp
     {
         public ObjectId ID => id;
         public Time1 Short => Time;
-        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
+        public DateTimeOffset Timestamp => TimestampLookup.Get(this);
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -391,7 +406,7 @@ namespace gs.sharp
     {
         public ObjectId ID => id;
         public Time1 Short => Time;
-        public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
+        public DateTimeOffset Timestamp => TimestampLookup.Get(this);
 
         private readonly ObjectId id;
         public readonly Time1 Time;
@@ -438,7 +453,7 @@ namespace gs.sharp
     }
 
     [StructLayout(LayoutKind.Explicit)]
-    public readonly struct GSObject
+    public readonly struct GSObject : IDisposable
     {
         [FieldOffset(0)]
         public readonly VarUint Type;
@@ -498,6 +513,25 @@ namespace gs.sharp
         {
             Type = (VarUint)Tag.Object1;
             Object1 = obj;
+        }
+
+        public void Dispose()
+        {
+            switch ((Tag)Type)
+            {
+                case Tag.Hand1:
+                    Hand1.Dispose();
+                    break;
+                case Tag.Hand2:
+                    Hand2.Dispose();
+                    break;
+                case Tag.Head1:
+                    Head1.Dispose();
+                    break;
+                case Tag.Object1:
+                    Object1.Dispose();
+                    break;
+            }
         }
     }
 

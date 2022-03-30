@@ -16,7 +16,7 @@ namespace gs.sharp.transceiver
         SendOnly
     }
 
-    public readonly struct AuthoredObject
+    public readonly struct AuthoredObject : IDisposable
     {
         public readonly GSObject GSObject;
         public readonly uint Author;
@@ -26,6 +26,8 @@ namespace gs.sharp.transceiver
             GSObject = gsObject;
             Author = author;
         }
+
+        public void Dispose() => GSObject.Dispose();
     }
 
     public interface IGameStateTransceiver
@@ -79,6 +81,15 @@ namespace gs.sharp.transceiver
         void NoRecentRemote();
     }
 
+    /// <summary>
+    /// Transformation function used to convert remote updates to local ones.
+    /// This may be required to correctly take over remote updates
+    /// after they have expired.
+    /// </summary>
+    /// <param name="remote">The remote update to transform.</param>
+    /// <returns>The resultant local update.</returns>
+    public delegate AuthoredObject RemoteToLocal(in AuthoredObject remote);
+
     public abstract class BaseGameStateTransceiver : IGameStateTransceiver
     {
         /// <inheritdoc/>
@@ -101,6 +112,7 @@ namespace gs.sharp.transceiver
         protected readonly bool _debugging;
         protected readonly IRetransmitReasons _reasons;
         protected readonly bool _prerendered;
+        protected readonly RemoteToLocal _remoteToLocal;
 
         // Locks.
         protected readonly object _localLock = new object();
@@ -112,13 +124,14 @@ namespace gs.sharp.transceiver
         /// <param name="expiryMs">Time in milliseconds after which updates
         /// should be considered expired.</param>
         /// <param name="debugging">Try to log at the debug level.</param>
-        protected BaseGameStateTransceiver(int expiryMs, bool debugging = false, IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional, bool prerendered = false)
+        protected BaseGameStateTransceiver(int expiryMs, bool debugging = false, IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional, bool prerendered = false, RemoteToLocal remoteToLocal = null)
         {
             _expiryMs = expiryMs;
             _debugging = debugging;
             _reasons = retransmitLog;
             Type = type;
             _prerendered = prerendered;
+            _remoteToLocal = remoteToLocal;
         }
 
         /// <inheritdoc/>
@@ -205,6 +218,13 @@ namespace gs.sharp.transceiver
                     {
                         throw new ArgumentException($"Local updates must move forward in time. Existing: {_lastLocalTime:HH:mm:ss.fff}, New: {timestamp:HH:mm:ss.fff}", nameof(value));
                     }
+
+                    // If there's an existing _lastLocal, we need to dispose it.
+                    if (!Default.Is(_lastLocal))
+                    {
+                        _lastLocal.Dispose();
+                    }
+
                     _local = _lastLocal = value;
                     _lastLocalTime = timestamp;
                 }
@@ -346,7 +366,7 @@ namespace gs.sharp.transceiver
         /// <param name="debugging">Try to log at the debug level.</param>
         public TimestampedGameStateTransceiver(int expiryMs, bool debugging = false,
             IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional,
-            bool prerendered = false) : base(expiryMs, debugging, retransmitLog, type, prerendered)
+            bool prerendered = false, RemoteToLocal remoteToLocal = null) : base(expiryMs, debugging, retransmitLog, type, prerendered, remoteToLocal)
         {
         }
 
@@ -388,8 +408,25 @@ namespace gs.sharp.transceiver
                             // Take it over.
                             _reasons?.YesExpiredRemote();
                             DoLog(LogType.Debug, $"Retransmitting (expired remote update)");
-                            _local = _lastLocal = _lastRemote;
-                            _lastLocalTime = GetTimestamp(_lastRemote);
+
+                            // Dispose any existing last local.
+                            if (!lastLocalIsDefault)
+                            {
+                                _lastLocal.Dispose();
+                            }
+
+                            // Convert the result if a conversion is supplied.
+                            if (_remoteToLocal != null)
+                            {
+                                // Conversion required.
+                                _local = _lastLocal = _remoteToLocal(_lastRemote);
+                            }
+                            else
+                            {
+                                // No conversion needed.
+                                _local = _lastLocal = _lastRemote;
+                            }
+                            _lastLocalTime = GetTimestamp(_lastLocal);
                             _lastRemote = default;
                             _lastRemoteTime = default;
                             _lastUpdateReceived = default;
@@ -463,6 +500,11 @@ namespace gs.sharp.transceiver
 
                 lock (_localLock)
                 {
+                    // Dispose any existing _lastLocal.
+                    if (Default.Is(_lastLocal))
+                    {
+                        _lastLocal.Dispose();
+                    }
                     _local = _lastLocal = value;
                     _lastLocalTime = DateTimeOffset.UtcNow;
                 }
@@ -602,7 +644,7 @@ namespace gs.sharp.transceiver
         /// <param name="debugging">Try to log at the debug level.</param>
         public LastMessageGameStateTransceiver(int expiryMs, bool debugging = false,
             IRetransmitReasons retransmitLog = null, TransceiveType type = TransceiveType.Bidirectional,
-            bool prerendered = false) : base(expiryMs, debugging, retransmitLog, type, prerendered)
+            bool prerendered = false, RemoteToLocal remoteToLocal = null) : base(expiryMs, debugging, retransmitLog, type, prerendered, remoteToLocal)
         {
         }
 
@@ -644,7 +686,20 @@ namespace gs.sharp.transceiver
                             // Take it over.
                             _reasons?.YesExpiredRemote();
                             DoLog(LogType.Debug, $"Retransmitting (expired remote update)");
-                            _local = _lastLocal = _lastRemote;
+
+                            if (!lastLocalIsDefault)
+                            {
+                                _lastLocal.Dispose();
+                            }
+
+                            if (_remoteToLocal != null)
+                            {
+                                _local = _lastLocal = _remoteToLocal(_lastRemote);
+                            }
+                            else
+                            {
+                                _local = _lastLocal = _lastRemote;
+                            }
                             _lastLocalTime = DateTimeOffset.UtcNow;
                             _lastRemote = default;
                             _lastUpdateReceived = default;
@@ -702,14 +757,14 @@ namespace gs.sharp.transceiver
 
     public class IGameStateTransceiverFactory
     {
-        public IGameStateTransceiver Create(Algorithm algorithm, int expiryMs, bool debugging = false, IRetransmitReasons reasons = null, TransceiveType type = TransceiveType.Bidirectional, bool prerendered = false)
+        public IGameStateTransceiver Create(Algorithm algorithm, int expiryMs, bool debugging = false, IRetransmitReasons reasons = null, TransceiveType type = TransceiveType.Bidirectional, bool prerendered = false, RemoteToLocal remoteToLocal = null)
         {
             switch (algorithm)
             {
                 case Algorithm.Timestamp:
-                    return new TimestampedGameStateTransceiver(expiryMs, debugging, reasons, type, prerendered);
+                    return new TimestampedGameStateTransceiver(expiryMs, debugging, reasons, type, prerendered, remoteToLocal);
                 case Algorithm.Latest:
-                    return new LastMessageGameStateTransceiver(expiryMs, debugging, reasons, type, prerendered);
+                    return new LastMessageGameStateTransceiver(expiryMs, debugging, reasons, type, prerendered, remoteToLocal);
                 default:
                     throw new ArgumentException($"Unsupported algorithm: {algorithm}", nameof(algorithm));
             }
