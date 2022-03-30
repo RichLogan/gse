@@ -21,7 +21,7 @@ namespace gs.sharp.transceiver
         public readonly GSObject GSObject;
         public readonly uint Author;
 
-        public AuthoredObject(GSObject gsObject, uint author)
+        public AuthoredObject(in GSObject gsObject, uint author)
         {
             GSObject = gsObject;
             Author = author;
@@ -146,7 +146,7 @@ namespace gs.sharp.transceiver
 
         protected abstract bool ShouldRetransmit();
 
-        protected void OnMessageToSend(AuthoredObject toSend) => MessageToSend?.Invoke(this, toSend);
+        protected void OnMessageToSend(in AuthoredObject toSend) => MessageToSend?.Invoke(this, toSend);
 
         protected void DoLog(LogType level, string message)
         {
@@ -161,9 +161,9 @@ namespace gs.sharp.transceiver
     /// <typeparam name="T"></typeparam>
     public class TimestampedGameStateTransceiver : BaseGameStateTransceiver
     {
-        private static DateTimeOffset GetTimestamp(AuthoredObject authored) => GetTimestamp(authored.GSObject);
+        private static DateTimeOffset GetTimestamp(in AuthoredObject authored) => GetTimestamp(authored.GSObject);
 
-        private static DateTimeOffset GetTimestamp(GSObject gsObject)
+        private static DateTimeOffset GetTimestamp(in GSObject gsObject)
         {
             switch (gsObject.Type)
             {
@@ -254,8 +254,8 @@ namespace gs.sharp.transceiver
                                 break;
                             case TransceiveType.Bidirectional:
                                 {
-                                    var localIsDefault = Default.Is(_local);
-                                    var remoteIsDefault = Default.Is(_remote);
+                                    var localIsDefault = Default.Is(in _local);
+                                    var remoteIsDefault = Default.Is(in _remote);
 
                                     // Priority for the non null value.
                                     if (localIsDefault && remoteIsDefault)
@@ -376,8 +376,8 @@ namespace gs.sharp.transceiver
             {
                 lock (_remoteLock)
                 {
-                    var lastLocalIsDefault = Default.Is(_lastLocal);
-                    var lastRemoteIsDefault = Default.Is(_lastRemote);
+                    var lastLocalIsDefault = Default.Is(in _lastLocal);
+                    var lastRemoteIsDefault = Default.Is(in _lastRemote);
 
                     // If there is an expired remote update, we might take it over.
                     if (!Default.Is(_lastUpdateReceived) && _lastUpdateReceived < expired)
@@ -511,8 +511,8 @@ namespace gs.sharp.transceiver
                                 break;
                             case TransceiveType.Bidirectional:
                                 {
-                                    var localIsDefault = Default.Is(_local);
-                                    var remoteIsDefault = Default.Is(_remote);
+                                    var localIsDefault = Default.Is(in _local);
+                                    var remoteIsDefault = Default.Is(in _remote);
 
                                     // Priority for the non null value.
                                     if (localIsDefault && remoteIsDefault)
@@ -632,8 +632,8 @@ namespace gs.sharp.transceiver
             {
                 lock (_remoteLock)
                 {
-                    var lastLocalIsDefault = Default.Is(_lastLocal);
-                    var lastRemoteIsDefault = Default.Is(_lastRemote);
+                    var lastLocalIsDefault = Default.Is(in _lastLocal);
+                    var lastRemoteIsDefault = Default.Is(in _lastRemote);
 
                     // If there is an expired remote update, we might take it over.
                     if (!Default.Is(_lastUpdateReceived) && _lastUpdateReceived < expired)

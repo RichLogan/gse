@@ -31,7 +31,6 @@
 
 using System;
 using System.Runtime.InteropServices;
-using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 namespace gs.sharp
@@ -44,7 +43,7 @@ namespace gs.sharp
         /// <summary>
         /// Provides a view into the underlying encoder buffer.
         /// </summary>
-        public IntPtr DataBuffer { get; private set; }
+        public IntPtr DataBuffer { get; }
 
         private readonly EncoderContextHandle _context;
         private bool _disposedValue;
@@ -78,7 +77,7 @@ namespace gs.sharp
         /// <param name="toEncode">Instance to encode.</param>
         /// <exception cref="InvalidOperationException">Underlying failure.</exception>
         /// <exception cref="ArgumentException">Unsupported type.</exception>
-        public void Encode(GSObject toEncode)
+        public void Encode(in GSObject toEncode)
         {
             int result = -1;
             var handle = GCHandle.Alloc(toEncode, GCHandleType.Pinned);

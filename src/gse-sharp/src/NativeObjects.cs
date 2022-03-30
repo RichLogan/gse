@@ -464,43 +464,37 @@ namespace gs.sharp
         [FieldOffset(sizeof(VarUint))]
         public readonly Object1 Object1;
 
-        public GSObject(Head1 head) : this()
+        public GSObject(in Head1 head) : this()
         {
             Type = (VarUint)Tag.Head1;
             Head1 = head;
         }
 
-        public GSObject(Hand1 hand) : this()
+        public GSObject(in Hand1 hand) : this()
         {
             Type = (VarUint)Tag.Hand1;
             Hand1 = hand;
         }
 
-        public GSObject(Mesh1Ptr mesh) : this()
+        public GSObject(in Mesh1Ptr mesh) : this()
         {
             Type = (VarUint)Tag.Mesh1;
             Mesh1 = mesh;
         }
 
-        public GSObject(Hand2 hand) : this()
+        public GSObject(in Hand2 hand) : this()
         {
             Type = (VarUint)Tag.Hand2;
             Hand2 = hand;
         }
 
-        public GSObject(HeadIPD1 head) : this()
-        {
-            Type = (VarUint)Tag.HeadIPD1;
-            HeadIPD1 = head;
-        }
-
-        public GSObject(UnknownObject obj) : this()
+        public GSObject(in UnknownObject obj) : this()
         {
             Type = obj.Tag;
             UnknownObject = obj;
         }
 
-        public GSObject(Object1 obj) : this()
+        public GSObject(in Object1 obj) : this()
         {
             Type = (VarUint)Tag.Object1;
             Object1 = obj;

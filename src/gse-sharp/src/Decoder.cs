@@ -43,7 +43,7 @@ namespace gs.sharp
         /// <summary>
         /// Provides a view into the underlying decoder buffer.
         /// </summary>
-        public IntPtr DataBuffer { get; private set; }
+        public IntPtr DataBuffer { get; }
 
         private readonly DecoderContextHandle _context;
         private bool _disposedValue;
@@ -51,7 +51,8 @@ namespace gs.sharp
         /// <summary>
         /// Create a new decoder with the given buffer size.
         /// </summary>
-        /// <param name="bufferSize">Size of the buffer to create in bytes.</param>
+        /// <param name="bufferSize">Size of the provided buffer in bytes.</param>
+        /// <param name="buffer">The provided buffer to decode into.</param>
         /// <exception cref="InvalidOperationException">Underlying decoder failure.</exception>
         public Decoder(int bufferSize, IntPtr buffer)
         {
@@ -96,7 +97,7 @@ namespace gs.sharp
             return gsObject;
         }
 
-        private static IMessage IsMessage(GSObject gsObject)
+        private static IMessage IsMessage(in GSObject gsObject)
         {
             switch (gsObject.Type)
             {
