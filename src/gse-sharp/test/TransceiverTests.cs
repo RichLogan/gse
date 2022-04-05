@@ -46,7 +46,7 @@ public class TransceiverTests
         gsm.Register("1".AsIObject(), Tag.Object1, transceiver);
 
         // Old remote.
-        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(10)), new Loc1(), new Rot1(), new Loc1());
+        var remote = new Object1(1, DateTimeOffset.UtcNow.Subtract(TimeSpan.FromSeconds(10)), new Loc1(), new Rot1(), new Loc1(), true);
         transceiver.Remote = new AuthoredObject(new GSObject(remote), 1);
 
         // As this is a new update, we're expecting a

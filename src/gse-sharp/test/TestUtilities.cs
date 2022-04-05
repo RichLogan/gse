@@ -38,7 +38,7 @@ namespace gs.sharp.test
         {
             public ulong ID => id;
             public ushort Short => time;
-            public DateTimeOffset Timestamp => TimestampLookup.Timestamps[this];
+            public DateTimeOffset Timestamp => TimestampLookup.Get(this);
 
             private readonly ulong id;
             private readonly ushort time;
@@ -56,7 +56,7 @@ namespace gs.sharp.test
                 this.time = time;
             }
 
-            public void Dispose() => TimestampLookup.Timestamps.TryRemove(this, out var _);
+            public void Dispose() => TimestampLookup.Remove(this);
         }
 
         [TestMethod]
@@ -92,5 +92,23 @@ namespace gs.sharp.test
         //    Thread.Sleep(TimeSpan.FromSeconds(67 * 2));
         //    Assert.IsFalse(Math.Abs((example.Short.ToDateTimeOffset() - now).TotalMilliseconds) < 1);
         //}
+
+        [TestMethod]
+        public void EncodeTime()
+        {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; i < 1000; i++)
+            {
+                var head1 = new Head1(1, 2, new Loc2(1, 2, 3, 4, 5, 6), new Rot2(1, 2, 3, 4, 5, 6));
+                var obj = new GSObject(head1);
+                var encoder = new Encoder(1500);
+                encoder.Encode(obj);
+                encoder.Dispose();
+            }
+
+            sw.Stop();
+            Console.WriteLine(sw.ElapsedMilliseconds);
+        }
     }
 }

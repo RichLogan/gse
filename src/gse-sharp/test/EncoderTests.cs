@@ -152,7 +152,7 @@ public class EncoderTests
         var hand2 = new Hand2(
             id: 12,
             time: 0x0500,
-            isLeftHand: true,
+            isLeftHand: 1,
             location,
             rotation,
             wrist,

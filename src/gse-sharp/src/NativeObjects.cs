@@ -120,9 +120,9 @@ namespace gs.sharp
 
     public static class IMessageExtensions
     {
-        public static void SaveTimestamp(this IMessage message)
+        public static void SaveTimestamp(this IMessage message, DateTimeOffset? existing = null)
         {
-            var timestamp = message.Short.ToDateTimeOffset();
+            var timestamp = existing ?? message.Short.ToDateTimeOffset();
             TimestampLookup.Save(message, timestamp);
         }
     }
@@ -216,6 +216,21 @@ namespace gs.sharp
                 ipdPresent = Convert.ToByte(true);
                 IPD = new HeadIPD1(ipd.Value);
             }
+            this.SaveTimestamp();
+        }
+
+        public Head1(ObjectId id, DateTimeOffset time, Loc2 location, Rot2 rotation, GSHalf? ipd = null) : this()
+        {
+            this.id = id;
+            Time = time.ToTime1();
+            Location = location;
+            Rotation = rotation;
+            if (ipd.HasValue)
+            {
+                ipdPresent = Convert.ToByte(true);
+                IPD = new HeadIPD1(ipd.Value);
+            }
+            this.SaveTimestamp(time);
         }
 
         public void Dispose() => TimestampLookup.Remove(this);
@@ -226,29 +241,49 @@ namespace gs.sharp
         public ObjectId ID => id;
         public Time1 Short => Time;
         public DateTimeOffset Timestamp => TimestampLookup.Get(this);
+        public bool Active => Convert.ToBoolean(active);
 
         private readonly ObjectId id;
         public readonly Time1 Time;
         public readonly Loc1 Location;
         public readonly Rot1 Rotation;
         public readonly Loc1 Scale;
+        private readonly Bool active;
         public readonly Bool HasParent;
         public readonly ObjectId Parent;
 
-        public Object1(ObjectId id, DateTimeOffset time, Loc1 location, Rot1 rotation, Loc1 scale, ObjectId? parent = null) : this()
+        public Object1(ObjectId id, Time1 time, Loc1 location, Rot1 rotation, Loc1 scale, Bool active = 1,
+            ObjectId? parent = null) : this()
+        {
+            this.id = id;
+            Time = time;
+            Location = location;
+            Rotation = rotation;
+            Scale = scale;
+            this.active = Convert.ToByte(active);
+            if (parent.HasValue)
+            {
+                HasParent = Convert.ToByte(true);
+                Parent = parent.Value;
+            }
+            this.SaveTimestamp();
+        }
+
+        public Object1(ObjectId id, DateTimeOffset time, Loc1 location, Rot1 rotation, Loc1 scale, bool active = true, ObjectId? parent = null) : this()
         {
             this.id = id;
             Time = time.ToTime1();
             Location = location;
             Rotation = rotation;
             Scale = scale;
+            this.active = Convert.ToByte(active);
             if (parent.HasValue)
             {
                 HasParent = Convert.ToByte(true);
                 Parent = parent.Value;
             }
 
-            this.SaveTimestamp();
+            this.SaveTimestamp(time);
         }
 
         public void Dispose() => TimestampLookup.Remove(this);
@@ -265,6 +300,26 @@ namespace gs.sharp
         public readonly Bool Left;
         public readonly Loc2 Location;
         public readonly Rot2 Rotation;
+
+        public Hand1(ObjectId id, Time1 time, Bool left, Loc2 location, Rot2 rotation)
+        {
+            this.id = id;
+            Time = time;
+            Left = left;
+            Location = location;
+            Rotation = rotation;
+            this.SaveTimestamp();
+        }
+
+        public Hand1(ObjectId id, DateTimeOffset time, bool left, Loc2 location, Rot2 rotation)
+        {
+            this.id = id;
+            Time = time.ToTime1();
+            Left = Convert.ToByte(left);
+            Location = location;
+            Rotation = rotation;
+            this.SaveTimestamp(time);
+        }
 
         public void Dispose() => TimestampLookup.Remove(this);
     }
@@ -420,10 +475,29 @@ namespace gs.sharp
         public readonly Finger Ring;
         public readonly Finger Pinky;
 
-        public Hand2(ObjectId id, Time1 time, bool isLeftHand, Loc2 location, Rot2 rotation, Transform1 wrist, Thumb thumb, Finger index, Finger middle, Finger ring, Finger pinky)
+        public Hand2(ObjectId id, Time1 time, Bool isLeftHand, Loc2 location, Rot2 rotation, Transform1 wrist,
+            Thumb thumb, Finger index, Finger middle, Finger ring, Finger pinky)
         {
             this.id = id;
             Time = time;
+            Left = isLeftHand;
+            Location = location;
+            Rotation = rotation;
+            Wrist = wrist;
+            Thumb = thumb;
+            Index = index;
+            Middle = middle;
+            Ring = ring;
+            Pinky = pinky;
+
+            this.SaveTimestamp();
+        }
+
+        public Hand2(ObjectId id, DateTimeOffset time, bool isLeftHand, Loc2 location, Rot2 rotation, Transform1 wrist,
+            Thumb thumb, Finger index, Finger middle, Finger ring, Finger pinky)
+        {
+            this.id = id;
+            Time = time.ToTime1();
             Left = Convert.ToByte(isLeftHand);
             Location = location;
             Rotation = rotation;
@@ -433,6 +507,8 @@ namespace gs.sharp
             Middle = middle;
             Ring = ring;
             Pinky = pinky;
+
+            this.SaveTimestamp(time);
         }
 
         public void Dispose() => TimestampLookup.Remove(this);

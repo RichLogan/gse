@@ -162,7 +162,7 @@ public class DecoderTests
     [TestMethod]
     public void TestEncodeDecodeObject()
     {
-        var obj = new Object1(5, DateTimeOffset.UtcNow, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9), 10);
+        var obj = new Object1(5, DateTimeOffset.UtcNow, new Loc1(1, 2, 3), new Rot1(4, 5, 6), new Loc1(7, 8, 9));
         var encoder = new Encoder(1500);
         encoder.Encode(new GSObject(obj));
         var decoder = new Decoder(1500, encoder.DataBuffer);
