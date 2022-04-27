@@ -157,7 +157,7 @@ namespace gs.sharp
         public static string ToAscii(this IObject obj) => Encoding.ASCII.GetString(BitConverter.GetBytes(obj.ID)).TrimEnd('\0');
     }
 
-    internal static class TimeExtension
+    public static class Time1Extensions
     {
         public static DateTimeOffset ToDateTimeOffset(this Time1 time)
         {
@@ -181,7 +181,7 @@ namespace gs.sharp
         }
     }
 
-    internal static class DateTimeOffsetExtension
+    public static class DateTimeOffsetExtension
     {
         public static Time1 ToTime1(this DateTimeOffset datetime)
         {
