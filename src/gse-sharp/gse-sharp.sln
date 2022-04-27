@@ -7,8 +7,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "gse-sharp", "src\gse-sharp.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "test", "test\test.csproj", "{204F0218-2D07-4A9B-B12C-0E26049935E6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "gse-sharp-transceiver", "gse-sharp-transceiver\gse-sharp-transceiver.csproj", "{DFC00A4A-4025-47D9-82D2-D76CC6DB4149}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
