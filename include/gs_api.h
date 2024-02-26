@@ -48,7 +48,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(__unix__) || defined(__APPLE__)
+#if __GNUC__ >= 4
+#define EXPORT __attribute__ ((visibility ("default")))
+#define CALL
+#elif defined(__unix__) || defined(__APPLE__)
 #define EXPORT
 #define CALL
 #elif _WIN32
